@@ -36,6 +36,11 @@ from src.workflows.planning import build_planning_workflow
 from src.workflows.planning import PlanningInput as WorkflowPlanningInput
 from src.workflows.planning import _planning_steps as _run_planning_steps
 from src.workflows.planning import STAGE_STATUS_TEXT, parse_tasks_from_message
+from pydantic import ValidationError
+from src.commands import load_commands
+from src.commands.base import CommandResult
+from src.commands.context import CommandContext
+from src.commands.registry import CommandRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -949,6 +954,8 @@ class RedisSession:
                 # STOP is handled by RedisWorker via task.cancel()
                 # This path shouldn't be reached for STOP since Worker handles it directly
                 self.cancel_event.set()
+            elif frame.op == Op.COMMAND_CALL:
+                await self._handle_command_call(frame)
             else:
                 logger.warning("[RedisSession] Unsupported op: %s", frame.op)
         except asyncio.CancelledError:
@@ -1326,6 +1333,103 @@ class RedisSession:
                 "[RedisSession] Failed to schedule deferred learning (non-fatal): %s",
                 e,
             )
+
+    async def _handle_command_call(self, frame: Frame) -> None:
+        """Dispatch op=command_call frames to the registered command handler."""
+        # Defense-in-depth: reject cross-user frames before touching any handler.
+        frame_user = (
+            (frame.payload or {}).get("user_id")
+            if isinstance(frame.payload, dict)
+            else None
+        )
+        if frame_user and self.user_id and frame_user != self.user_id:
+            logger.warning(
+                "command_call user mismatch: frame=%s session=%s",
+                frame_user,
+                self.user_id,
+            )
+            await self._emit_command_result(
+                frame,
+                CommandResult.error(code="user_mismatch", message="Session user mismatch"),
+            )
+            return
+
+        load_commands()
+        payload = frame.payload or {}
+        name = payload.get("name")
+        raw_args = payload.get("args") or {}
+
+        spec = CommandRegistry.get(name) if isinstance(name, str) else None
+        if spec is None:
+            await self._emit_command_result(
+                frame,
+                CommandResult.error(code="unknown_command", message=f"Unknown command: {name}"),
+            )
+            return
+
+        try:
+            args = spec.args_model.model_validate(raw_args)
+        except ValidationError as e:
+            await self._emit_command_result(
+                frame,
+                CommandResult.error(code="invalid_args", message=str(e)),
+            )
+            return
+
+        ctx = CommandContext(
+            user_id=self.user_id or "",
+            session_id=getattr(self, "session_id", None),
+            chat_id=getattr(self, "chat_id", None),
+            tools_config=getattr(self, "tools_config_client", None),
+            knowledge=getattr(self, "knowledge", None),
+            emit=self._emit_intermediate_frame,
+            client_tool_runner=getattr(self, "_run_client_tool", None),
+        )
+
+        try:
+            result = await spec.handler(args, ctx)
+        except Exception as exc:
+            logger.exception("[RedisSession] Command handler raised: %s", name)
+            result = CommandResult.error(code="handler_error", message=str(exc))
+
+        await self._emit_command_result(frame, result)
+
+    async def _emit_intermediate_frame(self, payload: dict) -> None:
+        """Used by handlers via ctx.emit() for streaming text/reasoning frames."""
+        out = Frame(
+            id=self.next_id,
+            ts=datetime.now(timezone.utc),
+            kind=Kind.DATA,
+            op=Op.MESSAGE,
+            payload=payload,
+            chat_id=getattr(self, "chat_id", None),
+        )
+        await self._send_frame(out)
+
+    async def _emit_command_result(self, source: Frame, result: CommandResult) -> None:
+        """Emit a final op=done frame carrying the command_result in meta."""
+        body: dict[str, Any] = {
+            "type": "text",
+            "message": result.text,
+            "meta": {
+                "command_result": {
+                    "ok": result.ok,
+                    "text": result.text,
+                    "data": result.data,
+                    "error": result.error,
+                    "question": result.question,
+                }
+            },
+        }
+        done = Frame(
+            id=self.next_id,
+            ts=datetime.now(timezone.utc),
+            kind=Kind.DATA,
+            op=Op.DONE,
+            payload=body,
+            chat_id=source.chat_id,
+        )
+        await self._send_frame(done)
 
     async def handle_user_message(self, frame: Frame):
         payload = frame.payload or {}

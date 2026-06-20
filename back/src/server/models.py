@@ -27,6 +27,7 @@ class Op(str, Enum):
     STOP = "stop"
     SIGNAL = "signal"
     TASK_START = "task_start"
+    COMMAND_CALL = "command_call"
 
 
 class StreamInfo(BaseModel):

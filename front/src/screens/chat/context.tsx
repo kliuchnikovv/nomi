@@ -181,6 +181,9 @@ export function ChatProvider({
     // include activeChatID, so the closure value would otherwise be stale).
     const activeChatIDRef = useRef<string>(activeChatID);
     activeChatIDRef.current = activeChatID;
+
+    // Pending slash-command calls: frameId → {resolve, reject}
+    const pendingCommandCallsRef = useRef<Map<string, { resolve: (r: import('../../commands/types').CommandResult) => void; reject: (e: Error) => void }>>(new Map());
     // Grace window before treating a mid-generation reconnect as a dead
     // generation. Long enough for the room's replay buffer + live frames to
     // arrive, short enough that a truly-dropped turn still gets re-sent.
@@ -1428,7 +1431,17 @@ export function ChatProvider({
     useEffect(() => {
         // We set handlers to the global socket to update local state like 'assistantWorking'
         socket.setHandlers({
-            onDone: () => {
+            onDone: (frame: any) => {
+                // Intercept slash-command results before normal chat DONE handling.
+                const commandResult = frame?.payload?.meta?.command_result;
+                if (commandResult !== undefined) {
+                    const pending = pendingCommandCallsRef.current.get(frame?.id);
+                    if (pending) {
+                        pendingCommandCallsRef.current.delete(frame?.id);
+                        pending.resolve(commandResult);
+                    }
+                    return;
+                }
                 // Clear timeout synchronously (not UI work)
                 if (responseTimeoutRef.current) {
                     clearTimeout(responseTimeoutRef.current);
@@ -1877,7 +1890,35 @@ export function ChatProvider({
         setAssistantWorking(false);
     }, [activeChatID]);
 
-    const value: ChatContextType = {
+    // ── Slash-command execution ──────────────────────────────────────────
+    const runCommand = useCallback(
+        (name: string, args: object): Promise<import('../../commands/types').CommandResult> => {
+            const promise = new Promise<import('../../commands/types').CommandResult>((resolve, reject) => {
+                const chatId = activeChatIDRef.current;
+                const frameId = socket.sendCommandCall(
+                    chatId,
+                    chatId, // sessionId = chatId (same convention as sendStreamingMessage)
+                    user?.id ?? '',
+                    name,
+                    args,
+                );
+                const timer = setTimeout(() => {
+                    if (pendingCommandCallsRef.current.has(frameId)) {
+                        pendingCommandCallsRef.current.delete(frameId);
+                        reject(new Error('command timeout'));
+                    }
+                }, 30_000);
+                pendingCommandCallsRef.current.set(frameId, {
+                    resolve: (r) => { clearTimeout(timer); resolve(r); },
+                    reject: (e) => { clearTimeout(timer); reject(e); },
+                });
+            });
+            return promise;
+        },
+        [user?.id],
+    );
+
+    const contextValue: ChatContextType = {
         messages: storeMessages, // Use the selected messages
         messagesLoading,
         getMessages,
@@ -1927,9 +1968,10 @@ export function ChatProvider({
             setSuggestedProjectId(null);
             setClassifiedText(null);
         },
+        runCommand,
     };
 
     return (
-        <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
+        <ChatContext.Provider value={contextValue}>{children}</ChatContext.Provider>
     );
 }

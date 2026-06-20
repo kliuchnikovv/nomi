@@ -439,6 +439,7 @@ class AgentFactory:
                 config_client=self._config_client,
                 client_tool_runner=client_tool_runner,
                 local_tools=local_tools if consolidate_local else None,
+                knowledge=self._knowledge,
             )
             tools = [discovery_fn]
             logger.info(

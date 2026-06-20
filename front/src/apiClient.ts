@@ -4,6 +4,7 @@ import {
     SidebarChatMessagesResponse,
     SidebarResponse,
 } from './screens/integrationsSidebar/models';
+import type { CommandSpec } from './commands/types';
 
 // Helper to get current API URL (reads from cache, falls back to default)
 const API_URL = () => getApiUrl();
@@ -665,6 +666,11 @@ export const byokApi = {
         ),
     delete: (provider: BYOKProvider) =>
         apiClient.delete<{ ok: boolean }>(`${API_URL()}/byok/${provider}`),
+};
+
+export const commandsApi = {
+    list: () =>
+        apiClient.get<{ commands: CommandSpec[] }>(`${API_URL()}/commands`),
 };
 
 export const credentialsApi = {

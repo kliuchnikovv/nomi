@@ -4,6 +4,7 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 import { ChatListScreen } from '../screens/chat/chatList/ChatListScreen';
 import { ChatDetailScreen } from '../screens/chat/chatDetail/ChatDetailScreen';
 import { VoiceScreen } from '../screens/chat/voice/VoiceScreen';
+import { CommandScreen } from '../screens/chat/CommandScreen';
 import { useMain, emptyChatID } from '../screens/main/context';
 import { useAuth } from '../screens/auth/context';
 import { ChatProvider } from '../screens/chat/context';
@@ -63,6 +64,11 @@ export function ChatStack() {
                             title: 'Voice',
                             animation: 'slide_from_bottom',
                         }}
+                    />
+                    <Stack.Screen
+                        name="CommandScreen"
+                        component={CommandScreen}
+                        options={{ title: 'Command', presentation: 'modal' }}
                     />
                 </Stack.Navigator>
             </AskUserProvider>

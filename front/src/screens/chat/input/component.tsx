@@ -1,4 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { CommandAutocomplete } from '../../../commands/CommandAutocomplete';
+import { CommandArgForm } from '../../../commands/CommandArgForm';
+import { CUSTOM_COMMAND_SCREENS } from '../../../commands/index';
+import type { CommandSpec } from '../../../commands/types';
 import {
     ArrowUp,
     Plus,
@@ -124,6 +128,8 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
     const { activeChatID } = useMain();
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [pickedCommand, setPickedCommand] = useState<CommandSpec | null>(null);
+    const { runCommand } = useChat();
 
     const handleSend = useCallback(async () => {
         console.log('[ChatInput] handleSend called');
@@ -816,8 +822,42 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                 )}
             </View>
 
+            {/* Slash-command autocomplete — shown above input when text starts with / */}
+            {value.startsWith('/') && !pickedCommand && (
+                <CommandAutocomplete
+                    query={value.slice(1)}
+                    onPick={(spec) => {
+                        if (spec.name in CUSTOM_COMMAND_SCREENS) {
+                            // Task 14: navigate to dedicated CommandScreen
+                            navigation.navigate('CommandScreen' as any, { spec } as any);
+                            setValue('');
+                        } else {
+                            setPickedCommand(spec);
+                            setValue('');
+                        }
+                    }}
+                />
+            )}
+
+            {/* Slash-command arg form — replaces input row while a command is selected */}
+            {pickedCommand && (
+                <CommandArgForm
+                    spec={pickedCommand}
+                    onSubmit={async (args) => {
+                        try {
+                            await runCommand(pickedCommand.name, args);
+                        } catch (e) {
+                            console.warn('command failed', e);
+                        } finally {
+                            setPickedCommand(null);
+                        }
+                    }}
+                    onCancel={() => setPickedCommand(null)}
+                />
+            )}
+
             {/* Row 2: Input + action button */}
-            <View style={styles.inputRow}>
+            {!pickedCommand && <View style={styles.inputRow}>
                 <TextInput
                     multiline
                     autoCapitalize="sentences"
@@ -887,7 +927,7 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                         )}
                     </Pressable>
                 )}
-            </View>
+            </View>}
 
             <ContextMenu
                 visible={modelMenuVisible}

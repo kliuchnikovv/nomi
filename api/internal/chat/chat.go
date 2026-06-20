@@ -54,5 +54,6 @@ type Message struct {
 	WebSearch     bool          `json:"web_search,omitempty"`     // For writing
 	ContextItems  interface{}   `json:"context_items,omitempty"`  // Context items (emails, documents, etc.)
 	CreatedAt     time.Time     `json:"created_at"`
-	StoppedAt     *time.Time    `json:"stopped_at,omitempty"` // Set when the user stopped this turn; suppresses client re-submission
+	StoppedAt     *time.Time             `json:"stopped_at,omitempty"` // Set when the user stopped this turn; suppresses client re-submission
+	Meta          map[string]interface{} `json:"meta,omitempty"`       // Optional metadata (e.g. command_call marker)
 }

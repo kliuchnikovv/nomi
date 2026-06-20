@@ -107,6 +107,10 @@ export type ProactiveMeta = {
         | 'watch_reminder';
     /** Native URL scheme or nomi:// route to open the underlying object, if any. */
     deep_link?: string;
+    /** Command call metadata for rendering command history bubbles. */
+    command_call?: boolean;
+    name?: string;
+    args?: Record<string, any>;
 };
 
 export type Message = {

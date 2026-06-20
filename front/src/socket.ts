@@ -48,10 +48,8 @@ export class ChatSocket {
     private chatId: string | null = null;
     private connectedChatId: string | null = null;
     private hasConnectedBefore = false;
-
-    // private sentCommandFrame = false; // Command frames are per-message/chat context now?
-    // Actually, team commands are sent once per session usually. But in a global socket, we might switch contexts.
-    // For now, let's keep it simple: we send commands when sending a message if needed, or rely on the backend session.
+    // frameIdCounter kept for legacy numeric frame ids; command calls use UUIDs instead.
+    private frameIdCounter = 1;
 
     constructor() {}
 
@@ -828,6 +826,43 @@ export class ChatSocket {
 
     sendStop(chatId: string) {
         this.sendMeta(chatId, 'stop', {});
+    }
+
+    /**
+     * Send a command_call signal frame. Returns the frame id so the caller can
+     * await the matching DONE frame that carries payload.meta.command_result.
+     */
+    sendCommandCall(
+        chatId: string,
+        _sessionId: string,
+        _userId: string,
+        name: string,
+        args: object,
+    ): string {
+        // Use a UUID string as the frame id so it survives reconnects without
+        // colliding with the monotonic integer counter used by other frame types.
+        const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        const frame = {
+            id,
+            kind: 'signal',
+            chat_id: chatId,
+            op: 'command_call',
+            payload: {
+                name,
+                args,
+            },
+        };
+        if (this.isReady()) {
+            try {
+                this.ws.send(JSON.stringify(frame));
+                this.touchActivity();
+            } catch {
+                this.pushToOutbox(frame);
+            }
+        } else {
+            this.pushToOutbox(frame);
+        }
+        return id;
     }
 
     close() {

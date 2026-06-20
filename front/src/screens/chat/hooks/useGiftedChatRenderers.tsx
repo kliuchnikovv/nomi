@@ -36,6 +36,7 @@ import { useChat } from '../context';
 import { ContentPartsRenderer } from '../message/ContentPartsRenderer';
 import { GenerationStatusBar } from '../components/GenerationStatusBar';
 import { Dimensions } from 'react-native';
+import { CommandHistoryBubble } from '../../../commands/CommandHistoryBubble';
 
 const openLink = (url: string) => {
     InAppBrowser.isAvailable().then(available => {
@@ -315,6 +316,15 @@ export function useGiftedChatRenderers({
     // Stable renderBubble - minimal dependencies
     const renderBubble = useCallback(
         (props: any) => {
+            const { currentMessage } = props;
+
+            // Render command-call messages with special bubble
+            if (currentMessage?.meta?.command_call === true) {
+                return (
+                    <CommandHistoryBubble meta={currentMessage.meta} />
+                );
+            }
+
             return (
                 <View style={{ width: '100%' }}>
                     <Bubble

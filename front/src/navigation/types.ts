@@ -12,6 +12,7 @@ export type ChatStackParamList = {
     ChatList: undefined;
     ChatDetail: { chatId?: string };
     VoiceScreen: { chatId: string };
+    CommandScreen: { spec: import('../commands/types').CommandSpec };
 };
 
 // Settings nested stack (inside the Settings tab)
