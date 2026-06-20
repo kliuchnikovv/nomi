@@ -969,7 +969,7 @@ class RedisSession:
                 await self.redis_client.close()
 
     async def build_agent_instance(
-        self, payload: dict, storage_backend: StorageBackend | None = None
+        self, payload: dict, storage_backend: AgnoBackend | None = None
     ):
         """Build the agent based on payload parameters."""
         # Extract params from payload or defaults

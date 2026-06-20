@@ -18,7 +18,7 @@ from src.tools.config import ToolConfigClient
 from src.tools.discovery import build_discovery_tool
 from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
-from src.storage.backend import StorageBackend
+from src.storage.backend import AgnoBackend
 from agno.tools import Toolkit
 
 logger = logging.getLogger(__name__)
@@ -360,7 +360,7 @@ class AgentFactory:
         bot_identity: dict | None = None,
         user_location: str | None = None,
         single_chat_mode: bool = False,
-        storage_backend: StorageBackend | None = None,
+        storage_backend: AgnoBackend | None = None,
         task_spawner: Callable[[str], Awaitable[str]] | None = None,
         sync_delegation_emitter: Callable[[str, str, str], Any] | None = None,
         task_mode: bool = False,
