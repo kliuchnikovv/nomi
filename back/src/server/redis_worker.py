@@ -338,9 +338,9 @@ class RedisWorker:
                 await self._start_task_run(chat_id, frame)
                 return
 
-            if frame.op != Op.MESSAGE:
+            if frame.op not in (Op.MESSAGE, Op.COMMAND_CALL):
                 logger.warning(
-                    "[RedisWorker] Ignoring non-MESSAGE op: %s for chat %s",
+                    "[RedisWorker] Ignoring unsupported op: %s for chat %s",
                     frame.op,
                     chat_id,
                 )
