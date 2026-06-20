@@ -7,6 +7,9 @@ from typing import Any, Callable
 
 from agno.tools import Function, Toolkit
 
+from src.commands import load_commands as _load_commands
+from src.commands.context import CommandContext
+from src.commands.registry import CommandRegistry
 from src.tools.config import ToolConfigClient
 from src.tools.executor import ServerToolExecutor
 from src.tools.registry import ToolRegistry
@@ -88,6 +91,14 @@ def _build_discovery_description(local_tools: list[Toolkit] | None = None) -> st
         label = LOCAL_TOOL_LABELS.get(tk.name, tk.name)
         if label and label not in capabilities:
             capabilities.append(label)
+
+    try:
+        _load_commands()
+        for spec in CommandRegistry.all():
+            if spec.title and spec.title not in capabilities:
+                capabilities.append(spec.title)
+    except Exception:
+        logger.warning("[Discovery] Failed to load command titles", exc_info=True)
 
     return (
         "Execute any available action by describing what you need in natural "
@@ -317,6 +328,91 @@ async def _execute_local(tk: Toolkit, decision) -> str:
         )
 
 
+async def _noop_emit(_payload: dict) -> None:
+    """No-op emit callback used in the discovery command path."""
+    return None
+
+
+def _command_schemas() -> list[dict]:
+    """Return router schemas for all registered commands."""
+    _load_commands()
+    return CommandRegistry.router_schemas()
+
+
+async def _execute_command(
+    spec: Any,
+    decision: Any,
+    user_id: str,
+    tools_config: Any,
+    knowledge: Any,
+) -> str:
+    """Validate args, build a CommandContext, run the handler, and return JSON."""
+    try:
+        args = spec.args_model.model_validate(getattr(decision, "params", None) or {})
+    except Exception as e:
+        return json.dumps(
+            {
+                "type": "error",
+                "error": f"invalid_args: {e}",
+                "tool": spec.name,
+                "method": "invoke",
+            }
+        )
+
+    ctx = CommandContext(
+        user_id=user_id,
+        session_id=None,
+        chat_id=None,
+        tools_config=tools_config,
+        knowledge=knowledge,
+        emit=_noop_emit,
+        client_tool_runner=None,
+    )
+    try:
+        result = await spec.handler(args, ctx)
+    except Exception:
+        logger.warning(
+            "[Discovery] Command handler crashed: %s", spec.name, exc_info=True
+        )
+        return json.dumps(
+            {
+                "type": "error",
+                "error": "Command handler crashed",
+                "tool": spec.name,
+                "method": "invoke",
+            }
+        )
+
+    if not result.ok and result.error:
+        return json.dumps(
+            {
+                "type": "error",
+                "error": result.error.get("message", "error"),
+                "tool": spec.name,
+                "method": "invoke",
+            }
+        )
+    if not result.ok and result.question:
+        return json.dumps(
+            {
+                "type": "question",
+                "question": result.question["question"],
+                "options": result.question.get("options", []),
+            }
+        )
+    result_value = result.text
+    if result.data and not result.text:
+        result_value = json.dumps(result.data)
+    return json.dumps(
+        {
+            "type": "result",
+            "result": result_value,
+            "tool": spec.name,
+            "method": "invoke",
+        }
+    )
+
+
 def build_discovery_tool(
     user_id: str,
     config_client: ToolConfigClient,
@@ -325,6 +421,7 @@ def build_discovery_tool(
     local_tools: list[Toolkit] | None = None,
     router: ToolRouter | None = None,
     executor: ServerToolExecutor | None = None,
+    knowledge: Any = None,
 ) -> Function:
     """
     Build the discovery_tool Agno Function for a given user session.
@@ -368,8 +465,9 @@ def build_discovery_tool(
             return json.dumps({"type": "error", "error": "Failed to load integrations"})
 
         # Local (in-process) toolkits are always routable; integrations come from
-        # the user's config. Combine both so the router can pick either.
-        schemas = ToolRegistry.build(tools_config) + _local_schema_list
+        # the user's config. Commands are also routable via discovery_tool.
+        # Combine all three so the router can pick any of them.
+        schemas = ToolRegistry.build(tools_config) + _local_schema_list + _command_schemas()
         if not schemas:
             return json.dumps({"type": "error", "error": "No integrations connected"})
 
@@ -455,6 +553,13 @@ def build_discovery_tool(
         local_tk = _local_index.get(decision.tool)
         if local_tk is not None:
             return await _execute_local(local_tk, decision)
+
+        # Command path: dispatch to registered command handler.
+        cmd_spec = CommandRegistry.get(decision.tool)
+        if cmd_spec is not None:
+            return await _execute_command(
+                cmd_spec, decision, user_id, tools_config, knowledge
+            )
 
         tool_schema = next((s for s in schemas if s["name"] == decision.tool), None)
         if not tool_schema:
