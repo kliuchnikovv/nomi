@@ -1407,7 +1407,11 @@ class RedisSession:
         await self._send_frame(out)
 
     async def _emit_command_result(self, source: Frame, result: CommandResult) -> None:
-        """Emit a final op=done frame carrying the command_result in meta."""
+        """Emit a final op=done frame carrying the command_result in meta.
+
+        The id of the request frame is echoed back so the frontend's
+        pendingCommandCallsRef map can correlate the response.
+        """
         body: dict[str, Any] = {
             "type": "text",
             "message": result.text,
@@ -1422,12 +1426,17 @@ class RedisSession:
             },
         }
         done = Frame(
-            id=self.next_id,
+            id=source.id,
             ts=datetime.now(timezone.utc),
             kind=Kind.DATA,
             op=Op.DONE,
             payload=body,
             chat_id=source.chat_id,
+        )
+        logger.info(
+            "[RedisSession] emitting command_result for frame %s ok=%s",
+            source.id,
+            result.ok,
         )
         await self._send_frame(done)
 
