@@ -48,6 +48,7 @@ export class ChatSocket {
     private chatId: string | null = null;
     private connectedChatId: string | null = null;
     private hasConnectedBefore = false;
+    // frameIdCounter kept for legacy numeric frame ids; command calls use UUIDs instead.
     private frameIdCounter = 1;
 
     constructor() {}
@@ -833,12 +834,14 @@ export class ChatSocket {
      */
     sendCommandCall(
         chatId: string,
-        sessionId: string,
-        userId: string,
+        _sessionId: string,
+        _userId: string,
         name: string,
         args: object,
-    ): number {
-        const id = this.frameIdCounter++;
+    ): string {
+        // Use a UUID string as the frame id so it survives reconnects without
+        // colliding with the monotonic integer counter used by other frame types.
+        const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
         const frame = {
             id,
             kind: 'signal',
@@ -847,8 +850,6 @@ export class ChatSocket {
             payload: {
                 name,
                 args,
-                sessionId,
-                user_id: userId,
             },
         };
         if (this.isReady()) {

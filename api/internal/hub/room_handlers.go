@@ -1091,11 +1091,20 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		senderID := msg.Client.userID
 
 		msgID := uuid.New()
-		// Parse command name from payload for the meta marker (best-effort).
+		// Parse command name and args from payload for the meta marker (best-effort).
 		var cmdPayload struct {
-			Name string `json:"name"`
+			Name string          `json:"name"`
+			Args json.RawMessage `json:"args"`
 		}
 		_ = json.Unmarshal(frame.Payload, &cmdPayload)
+
+		metaBytes, _ := json.Marshal(map[string]interface{}{
+			"command_call": true,
+			"name":         cmdPayload.Name,
+			"args":         cmdPayload.Args,
+		})
+		var metaMap map[string]interface{}
+		_ = json.Unmarshal(metaBytes, &metaMap)
 
 		if err := r.store.UpsertMessage(context.Background(), senderID, &chat.Message{
 			ID:        msgID,
@@ -1104,10 +1113,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			Role:      chat.RoleUser,
 			Text:      "",
 			CreatedAt: time.Now().UTC(),
-			Meta: map[string]interface{}{
-				"command_call": true,
-				"name":         cmdPayload.Name,
-			},
+			Meta:      metaMap,
 		}); err != nil {
 			r.logger.Error("failed to save command_call message", zap.Error(err))
 			r.sendErrorFrame(ErrorCodeSaveFailed, "Failed to save command_call to database", err, frame.TraceID, map[string]interface{}{

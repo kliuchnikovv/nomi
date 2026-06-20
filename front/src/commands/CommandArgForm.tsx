@@ -89,6 +89,9 @@ function validateField(
     if (schema.enum && !schema.enum.includes(value)) {
       return `Must be one of: ${schema.enum.join(', ')}`;
     }
+    if (schema.format === 'email' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {
+      return 'Invalid email';
+    }
   }
 
   if (

@@ -108,6 +108,9 @@ def _make_session(knowledge=None) -> RedisSession:
     session.next_id = 0
     session._go_ws = None
     session.redis_client = None
+    # Attributes initialised in __init__ that handle_frame's finally block touches
+    session._result_listener_task = None
+    session.pubsub = None
     # Replace _send_frame so no real Redis/WS calls occur
     session._send_frame = AsyncMock()
     return session
@@ -189,6 +192,35 @@ async def test_command_call_unknown_command():
     cr = sent.payload["meta"]["command_result"]
     assert cr["ok"] is False
     assert cr["error"]["code"] == "unknown_command"
+
+
+@pytest.mark.asyncio
+async def test_handle_frame_routes_command_call():
+    """handle_frame(op=COMMAND_CALL) routes to _handle_command_call.
+
+    We confirm routing by checking that _send_frame is called with a DONE frame
+    that carries payload.meta.command_result — the signature of _emit_command_result.
+    """
+    knowledge = MagicMock()
+    knowledge.insert = MagicMock(return_value=None)
+
+    session = _make_session(knowledge=knowledge)
+
+    frame = Frame(
+        id=2,
+        ts=datetime.now(timezone.utc),
+        kind=Kind.DATA,
+        op=Op.COMMAND_CALL,
+        chat_id="chat-1",
+        payload={"name": "memory.note", "args": {"text": "routed via handle_frame"}},
+    )
+
+    await session.handle_frame(frame)
+
+    session._send_frame.assert_called_once()
+    sent: Frame = session._send_frame.call_args[0][0]
+    assert sent.op == Op.DONE
+    assert "command_result" in sent.payload.get("meta", {})
 
 
 @pytest.mark.asyncio

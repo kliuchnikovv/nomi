@@ -188,7 +188,7 @@ export function ChatProvider({
     activeChatIDRef.current = activeChatID;
 
     // Pending slash-command calls: frameId → {resolve, reject}
-    const pendingCommandCallsRef = useRef<Map<number, { resolve: (r: import('../../commands/types').CommandResult) => void; reject: (e: Error) => void }>>(new Map());
+    const pendingCommandCallsRef = useRef<Map<string, { resolve: (r: import('../../commands/types').CommandResult) => void; reject: (e: Error) => void }>>(new Map());
     // Grace window before treating a mid-generation reconnect as a dead
     // generation. Long enough for the room's replay buffer + live frames to
     // arrive, short enough that a truly-dropped turn still gets re-sent.

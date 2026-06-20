@@ -400,9 +400,13 @@ async def _execute_command(
                 "options": result.question.get("options", []),
             }
         )
-    result_value = result.text
-    if result.data and not result.text:
-        result_value = json.dumps(result.data)
+    result_value: Any = {}
+    if result.text:
+        result_value["text"] = result.text
+    if result.data:
+        result_value["data"] = result.data
+    if not result_value:
+        result_value = ""
     return json.dumps(
         {
             "type": "result",

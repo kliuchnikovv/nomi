@@ -1364,6 +1364,24 @@ class RedisSession:
 
     async def _handle_command_call(self, frame: Frame) -> None:
         """Dispatch op=command_call frames to the registered command handler."""
+        # Defense-in-depth: reject cross-user frames before touching any handler.
+        frame_user = (
+            (frame.payload or {}).get("user_id")
+            if isinstance(frame.payload, dict)
+            else None
+        )
+        if frame_user and self.user_id and frame_user != self.user_id:
+            logger.warning(
+                "command_call user mismatch: frame=%s session=%s",
+                frame_user,
+                self.user_id,
+            )
+            await self._emit_command_result(
+                frame,
+                CommandResult.error(code="user_mismatch", message="Session user mismatch"),
+            )
+            return
+
         load_commands()
         payload = frame.payload or {}
         name = payload.get("name")

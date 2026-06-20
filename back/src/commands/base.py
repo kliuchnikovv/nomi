@@ -36,6 +36,10 @@ class CommandResult:
 # as constructor calls, and result.ok / result.error / result.question as field
 # reads — these two usages coexist because the constructors are plain module-
 # level functions assigned as class attributes, not descriptors.
+#
+# NOTE: `CommandResult.ok` is overloaded (field + constructor). There are >10
+# call sites so renaming to `success` is deferred; be careful not to use
+# `CommandResult.ok` as a class attribute lookup without calling it.
 CommandResult.ok = staticmethod(_make_ok)  # type: ignore[method-assign]
 CommandResult.error = staticmethod(_make_error)  # type: ignore[method-assign]
 CommandResult.question = staticmethod(_make_question)  # type: ignore[method-assign]
