@@ -1972,7 +1972,7 @@ export function ChatProvider({
     // ── Slash-command execution ──────────────────────────────────────────
     const runCommand = useCallback(
         (name: string, args: object): Promise<import('../../commands/types').CommandResult> => {
-            return new Promise((resolve, reject) => {
+            const promise = new Promise<import('../../commands/types').CommandResult>((resolve, reject) => {
                 const chatId = activeChatIDRef.current;
                 const frameId = socket.sendCommandCall(
                     chatId,
@@ -1981,20 +1981,18 @@ export function ChatProvider({
                     name,
                     args,
                 );
-                pendingCommandCallsRef.current.set(frameId, { resolve, reject });
                 const timer = setTimeout(() => {
                     if (pendingCommandCallsRef.current.has(frameId)) {
                         pendingCommandCallsRef.current.delete(frameId);
                         reject(new Error('command timeout'));
                     }
                 }, 30_000);
-                // Wrap resolve/reject to clear the timer
-                const entry = pendingCommandCallsRef.current.get(frameId)!;
                 pendingCommandCallsRef.current.set(frameId, {
-                    resolve: (r) => { clearTimeout(timer); entry.resolve(r); },
-                    reject: (e) => { clearTimeout(timer); entry.reject(e); },
+                    resolve: (r) => { clearTimeout(timer); resolve(r); },
+                    reject: (e) => { clearTimeout(timer); reject(e); },
                 });
             });
+            return promise;
         },
         [user?.id],
     );

@@ -844,8 +844,13 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                 <CommandArgForm
                     spec={pickedCommand}
                     onSubmit={async (args) => {
-                        await runCommand(pickedCommand.name, args);
-                        setPickedCommand(null);
+                        try {
+                            await runCommand(pickedCommand.name, args);
+                        } catch (e) {
+                            console.warn('command failed', e);
+                        } finally {
+                            setPickedCommand(null);
+                        }
                     }}
                     onCancel={() => setPickedCommand(null)}
                 />
