@@ -1376,14 +1376,24 @@ class RedisSession:
             )
             return
 
+        # RedisSession doesn't carry `knowledge` itself — the shared Agno
+        # Knowledge handle lives on the AgentFactory (same lookup the agent
+        # path uses around lines 1213/1582). Without it, memory.note and
+        # learn.feedback fall back to NO_KNOWLEDGE.
+        knowledge = getattr(getattr(self, "agent_factory", None), "_knowledge", None)
         ctx = CommandContext(
             user_id=self.user_id or "",
             session_id=getattr(self, "session_id", None),
             chat_id=getattr(self, "chat_id", None),
             tools_config=getattr(self, "tools_config_client", None),
-            knowledge=getattr(self, "knowledge", None),
+            knowledge=knowledge,
             emit=self._emit_intermediate_frame,
             client_tool_runner=getattr(self, "_run_client_tool", None),
+        )
+        logger.info(
+            "[RedisSession] _handle_command_call name=%s has_knowledge=%s",
+            name,
+            knowledge is not None,
         )
 
         try:
