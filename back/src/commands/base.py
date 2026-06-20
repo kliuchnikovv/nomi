@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Sequence
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from src.commands.context import CommandContext
 
 
 def _make_ok(text: str = "", data: dict[str, Any] | None = None) -> "CommandResult":
@@ -39,7 +42,7 @@ CommandResult.error = staticmethod(_make_error)  # type: ignore[method-assign]
 CommandResult.question = staticmethod(_make_question)  # type: ignore[method-assign]
 
 
-CommandHandler = Callable[[BaseModel, Any], Awaitable[CommandResult]]
+CommandHandler = Callable[[BaseModel, CommandContext], Awaitable[CommandResult]]
 
 
 @dataclass(frozen=True)
