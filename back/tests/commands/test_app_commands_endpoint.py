@@ -133,7 +133,7 @@ def test_get_commands_returns_listing():
 
     # Patch the module-level singleton instance
     with patch.object(app_module._tool_config_client, "fetch_tools", new_callable=AsyncMock, side_effect=_fake_fetch):
-        resp = client.get("/commands", headers={"X-User-Id": "user-1"})
+        resp = client.get("/commands", headers={"X-User-ID": "user-1"})
 
     assert resp.status_code == 200
     body = resp.json()
@@ -158,7 +158,7 @@ def test_get_commands_with_connected_integrations():
 
     # Patch the module-level singleton instance
     with patch.object(app_module._tool_config_client, "fetch_tools", new_callable=AsyncMock, side_effect=_fake_fetch):
-        resp = client.get("/commands", headers={"X-User-Id": "user-2"})
+        resp = client.get("/commands", headers={"X-User-ID": "user-2"})
 
     assert resp.status_code == 200
     body = resp.json()

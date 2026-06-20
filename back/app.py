@@ -219,7 +219,7 @@ async def health_check():
 
 
 @app.get("/commands")
-async def list_commands(x_user_id: str = Header(..., alias="X-User-Id")):
+async def list_commands(x_user_id: str = Header(..., alias="X-User-ID")):
     """Return per-user command listing with missing integrations computed.
 
     Uses the user's connected integrations (fetched via ToolConfigClient)
