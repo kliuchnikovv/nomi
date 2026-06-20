@@ -1,81 +1,129 @@
-"""Tests for the op=command_call dispatch path (Task 5).
+"""Tests for RedisSession._handle_command_call dispatch path (Task 5).
 
-We test the dispatch logic — command lookup, arg validation, handler invocation,
-and error handling — using only the commands package (src.commands.*).  We do
-NOT import src.server.redis_session because its transitive import chain
-(redis_session → agents.nomi) uses Python 3.10+ union syntax that fails at
-class-body evaluation time on Python 3.9.
+We call the REAL RedisSession._handle_command_call by:
+  1. Stubbing problematic transitive imports via sys.modules BEFORE importing RedisSession
+  2. Constructing a minimal instance via RedisSession.__new__(RedisSession)
+  3. Replacing session._send_frame with an AsyncMock to capture emitted frames
 
-The dispatch logic under test is the same code path that
-RedisSession._handle_command_call executes; we call it via an isolated async
-helper that mirrors the real implementation so the tests validate the actual
-command framework contract.
+Stub list (why each is needed):
+  - httpx                  : imported at module level in redis_session.py
+  - redis / redis.asyncio  : redis_client module-level import (needs package structure)
+  - redis.exceptions       : ConnectionError alias used in redis_session.py
+  - agno.*                 : agno.media, agno.memory.manager, agno.models.message — module-level
+  - src.agents.factory     : AgentFactory — module-level import in redis_session.py
+  - src.agents.nomi        : NomiAgent / build_learning_machine — module-level import
+  - src.storage.backend    : PayloadBackend / StorageBackend — module-level import
+  - src.storage.factory    : create_storage_backend — module-level import
+  - src.workflows.models   : PlanStatus — module-level import
+  - src.workflows.planning : build_planning_workflow etc — module-level import
 """
 from __future__ import annotations
 
 import sys
-import pytest
-from pydantic import ValidationError
+import types
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
-import src.commands as commands_pkg
-from src.commands import load_commands
-from src.commands.registry import CommandRegistry
-from src.commands.context import CommandContext
-from src.commands.base import CommandResult, CommandSpec
+import pytest
 
 
 # ---------------------------------------------------------------------------
-# Inline dispatcher that mirrors RedisSession._handle_command_call logic.
-# This is NOT a duplicate of production code — it's a test harness that
-# exercises the exact same command framework contracts.
+# Install stubs BEFORE importing anything from src.server
 # ---------------------------------------------------------------------------
 
-async def _dispatch(
-    name: str,
-    raw_args: dict,
-    *,
-    user_id: str = "user-1",
-    session_id: str = "sess-1",
-    chat_id: str = "chat-1",
-    knowledge=None,
-) -> CommandResult:
-    """Dispatch a command by name+args and return the CommandResult."""
-    spec = CommandRegistry.get(name) if isinstance(name, str) else None
-    if spec is None:
-        return CommandResult.error(code="unknown_command", message=f"Unknown command: {name}")
+def _install_stubs() -> None:
+    mm = MagicMock
 
-    try:
-        args = spec.args_model.model_validate(raw_args)
-    except ValidationError as e:
-        return CommandResult.error(code="invalid_args", message=str(e))
+    # redis needs a real package structure (not a plain MagicMock) so that
+    # "import redis.asyncio as redis" and "from redis.exceptions import …" work.
+    redis_mod = types.ModuleType("redis")
+    redis_asyncio = mm()
+    redis_exceptions = types.ModuleType("redis.exceptions")
+    redis_exceptions.ConnectionError = ConnectionError  # type: ignore[attr-defined]
+    redis_mod.asyncio = redis_asyncio  # type: ignore[attr-defined]
+    redis_mod.exceptions = redis_exceptions  # type: ignore[attr-defined]
+    sys.modules.setdefault("redis", redis_mod)
+    sys.modules.setdefault("redis.asyncio", redis_asyncio)
+    sys.modules.setdefault("redis.exceptions", redis_exceptions)
 
-    ctx = CommandContext(
-        user_id=user_id,
-        session_id=session_id,
-        chat_id=chat_id,
-        tools_config=None,
-        knowledge=knowledge,
-        emit=AsyncMock(),
-        client_tool_runner=None,
+    for name in [
+        "httpx",
+        "agno",
+        "agno.media",
+        "agno.memory",
+        "agno.memory.manager",
+        "agno.models",
+        "agno.models.message",
+        "agno.db",
+        "agno.db.postgres",
+        "agno.db.postgres.async_postgres",
+        "agno.db.postgres.schemas",
+        "agno.vectordb",
+        "agno.vectordb.pgvector",
+        "agno.vectordb.pgvector.pgvector",
+        "src.agents.factory",
+        "src.agents.nomi",
+        "src.storage.backend",
+        "src.storage.factory",
+        "src.workflows.models",
+        "src.workflows.planning",
+    ]:
+        sys.modules.setdefault(name, mm())
+
+
+_install_stubs()
+
+# Now safe to import RedisSession and the command framework
+from src.server.redis_session import RedisSession  # noqa: E402
+from src.server.models import Frame, Kind, Op  # noqa: E402
+import src.commands as commands_pkg  # noqa: E402
+from src.commands import load_commands  # noqa: E402
+from src.commands.registry import CommandRegistry  # noqa: E402
+from src.commands.base import CommandSpec  # noqa: E402
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _make_frame(name: str, args: dict) -> Frame:
+    return Frame(
+        id=1,
+        ts=datetime.now(timezone.utc),
+        kind=Kind.DATA,
+        op=Op.MESSAGE,
+        chat_id="chat-1",
+        payload={"name": name, "args": args},
     )
 
-    try:
-        return await spec.handler(args, ctx)
-    except Exception as exc:
-        return CommandResult.error(code="handler_error", message=str(exc))
+
+def _make_session(knowledge=None) -> RedisSession:
+    """Build a minimal RedisSession without calling __init__."""
+    session = RedisSession.__new__(RedisSession)
+    session.user_id = "user-1"
+    session.session_id = "sess-1"
+    session.chat_id = "chat-1"
+    session.tools_config_client = None
+    session.knowledge = knowledge
+    session.next_id = 0
+    session._go_ws = None
+    session.redis_client = None
+    # Replace _send_frame so no real Redis/WS calls occur
+    session._send_frame = AsyncMock()
+    return session
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Registry fixture — reload commands fresh for each test
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
 def _reset_registry():
-    # Evict cached command modules so @command decorators re-run on load_commands()
     for mod_name in list(sys.modules):
         if mod_name.startswith("src.commands.") and mod_name not in {
-            "src.commands.base", "src.commands.registry", "src.commands.context"
+            "src.commands.base",
+            "src.commands.registry",
+            "src.commands.context",
         }:
             del sys.modules[mod_name]
     commands_pkg._loaded = False
@@ -92,34 +140,60 @@ def _reset_registry():
 
 @pytest.mark.asyncio
 async def test_command_call_success():
-    """Valid command + valid args → ok=True result."""
-    knowledge = AsyncMock()
-    result = await _dispatch("memory.note", {"text": "hello world"}, knowledge=knowledge)
-    assert result.ok is True
-    assert result.error is None
+    """Valid command + valid args → _send_frame called with op=done, ok=True."""
+    # memory.note calls knowledge.insert() synchronously
+    knowledge = MagicMock()
+    knowledge.insert = MagicMock(return_value=None)
+
+    session = _make_session(knowledge=knowledge)
+    frame = _make_frame("memory.note", {"text": "hello world"})
+
+    await session._handle_command_call(frame)
+
+    session._send_frame.assert_called_once()
+    sent: Frame = session._send_frame.call_args[0][0]
+    assert sent.op == Op.DONE
+    assert sent.payload is not None
+    cr = sent.payload["meta"]["command_result"]
+    assert cr["ok"] is True
+    assert cr["error"] is None
 
 
 @pytest.mark.asyncio
 async def test_command_call_invalid_args():
-    """Empty text violates min_length=1 → ok=False, code=invalid_args."""
-    result = await _dispatch("memory.note", {"text": ""})
-    assert result.ok is False
-    assert result.error is not None
-    assert result.error["code"] == "invalid_args"
+    """Empty text violates min_length=1 → op=done, ok=False, code=invalid_args."""
+    session = _make_session()
+    frame = _make_frame("memory.note", {"text": ""})
+
+    await session._handle_command_call(frame)
+
+    session._send_frame.assert_called_once()
+    sent: Frame = session._send_frame.call_args[0][0]
+    assert sent.op == Op.DONE
+    cr = sent.payload["meta"]["command_result"]
+    assert cr["ok"] is False
+    assert cr["error"]["code"] == "invalid_args"
 
 
 @pytest.mark.asyncio
 async def test_command_call_unknown_command():
-    """Unregistered command name → ok=False, code=unknown_command."""
-    result = await _dispatch("no.such.command", {})
-    assert result.ok is False
-    assert result.error is not None
-    assert result.error["code"] == "unknown_command"
+    """Unregistered command name → op=done, ok=False, code=unknown_command."""
+    session = _make_session()
+    frame = _make_frame("no.such.command", {})
+
+    await session._handle_command_call(frame)
+
+    session._send_frame.assert_called_once()
+    sent: Frame = session._send_frame.call_args[0][0]
+    assert sent.op == Op.DONE
+    cr = sent.payload["meta"]["command_result"]
+    assert cr["ok"] is False
+    assert cr["error"]["code"] == "unknown_command"
 
 
 @pytest.mark.asyncio
 async def test_command_call_handler_exception():
-    """Handler that raises RuntimeError → ok=False, code=handler_error, no re-raise."""
+    """Handler that raises RuntimeError → op=done, ok=False, code=handler_error, no re-raise."""
     from pydantic import BaseModel
 
     class _Args(BaseModel):
@@ -128,14 +202,27 @@ async def test_command_call_handler_exception():
     async def _boom(args, ctx):
         raise RuntimeError("kaboom")
 
-    spec = CommandSpec(name="test.boom", title="Boom", description="boom", args_model=_Args, handler=_boom)
+    spec = CommandSpec(
+        name="test.boom",
+        title="Boom",
+        description="boom",
+        args_model=_Args,
+        handler=_boom,
+    )
     CommandRegistry._by_name["test.boom"] = spec
 
     try:
-        result = await _dispatch("test.boom", {})
-        assert result.ok is False
-        assert result.error is not None
-        assert result.error["code"] == "handler_error"
-        assert "kaboom" in result.error["message"]
+        session = _make_session()
+        frame = _make_frame("test.boom", {})
+
+        await session._handle_command_call(frame)
+
+        session._send_frame.assert_called_once()
+        sent: Frame = session._send_frame.call_args[0][0]
+        assert sent.op == Op.DONE
+        cr = sent.payload["meta"]["command_result"]
+        assert cr["ok"] is False
+        assert cr["error"]["code"] == "handler_error"
+        assert "kaboom" in cr["error"]["message"]
     finally:
         CommandRegistry._by_name.pop("test.boom", None)
