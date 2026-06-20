@@ -24,16 +24,27 @@ import { ContextMenu, ContextMenuItem } from '../../components/ContextMenu';
 import { BrowserTab } from '../settings/connectors/tabs/BrowserTab';
 import { INTEGRATION_REGISTRY } from '../../services/integrations/registry';
 
-// Same category structure as BrowserTab
-const SECTIONS: { title: string; ids: string[] }[] = [
-    { title: 'Mail', ids: ['gmail', 'imap'] },
-    { title: 'Calendars', ids: ['calendar', 'ios_calendar'] },
-    { title: 'Messengers', ids: ['telegram'] },
+// UI grouping for the integrations list. Categories come from the integrations
+// registry (one source of truth for provider metadata); this map only decides
+// which categories collapse into a single visible section.
+const SECTION_CATEGORIES: { title: string; categories: string[] }[] = [
+    { title: 'Mail', categories: ['email'] },
+    { title: 'Calendars', categories: ['calendar'] },
+    { title: 'Messengers', categories: ['messaging'] },
     {
         title: 'Tools',
-        ids: ['github', 'ios_reminders', 'jules', 'ios_health', 'ios_contacts'],
+        categories: ['development', 'productivity', 'social', 'health'],
     },
 ];
+
+const SECTIONS: { title: string; ids: string[] }[] = SECTION_CATEGORIES.map(
+    ({ title, categories }) => ({
+        title,
+        ids: Object.values(INTEGRATION_REGISTRY)
+            .filter(m => m.category != null && categories.includes(m.category))
+            .map(m => m.id),
+    }),
+);
 const KNOWN_IDS = new Set(SECTIONS.flatMap(s => s.ids));
 
 function IntegrationItem({

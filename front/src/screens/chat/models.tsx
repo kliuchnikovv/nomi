@@ -4,7 +4,6 @@ import { PluginChatMessage } from '../integrationsSidebar/models';
 
 export type DetailLevel = 'hide' | 'tool_calls' | 'think' | 'all';
 
-
 export type Props = {
     children: ReactNode;
     activeChatID: string;
@@ -34,8 +33,23 @@ export interface ChatContextType {
     messagesLoading: boolean;
     getMessages: (chatId: string, opts?: { isRefresh?: boolean }) => void;
     refreshing: boolean;
-    sendMessage: (text: string, attachments?: any[], webSearch?: boolean, thinking?: string, role?: string, contextItems?: any[]) => void;
-    executeMessageAction: (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => Promise<void>;
+    sendMessage: (
+        text: string,
+        attachments?: any[],
+        webSearch?: boolean,
+        thinking?: string,
+        role?: string,
+        contextItems?: any[],
+    ) => void;
+    executeMessageAction: (
+        action: {
+            command: string;
+            url?: string | null;
+            prompt?: string | null;
+            agent?: string | null;
+        },
+        messageId: string,
+    ) => Promise<void>;
     assistantWorking: boolean;
     externalTitle?: string | null;
     startPluginThread: (args: {
@@ -47,7 +61,12 @@ export interface ChatContextType {
         messages?: PluginChatMessage[];
     }) => Promise<void>;
     isPluginThread: boolean;
-    pluginThreadMeta?: { provider: string; chatId: string | number; integrationId?: string; integrationName?: string | null } | null;
+    pluginThreadMeta?: {
+        provider: string;
+        chatId: string | number;
+        integrationId?: string;
+        integrationName?: string | null;
+    } | null;
     clearPluginThread: () => void;
     selectedModel: string | null;
     setSelectedModel: (model: string, isManual?: boolean) => void;
@@ -78,21 +97,30 @@ export interface ChatContextType {
     activeAgentsCount?: number;
     pendingInputText: string | null;
     setPendingInputText: (text: string | null) => void;
-    lastFailedMessage: { text: string; attachments?: any[]; messageId?: string; webSearch?: boolean; thinking?: string; contextItems?: any[] } | null;
-    setLastFailedMessage: (msg: { text: string; attachments?: any[]; messageId?: string; webSearch?: boolean; thinking?: string; contextItems?: any[] } | null) => void;
+    lastFailedMessage: {
+        text: string;
+        attachments?: any[];
+        messageId?: string;
+        webSearch?: boolean;
+        thinking?: string;
+        contextItems?: any[];
+    } | null;
+    setLastFailedMessage: (
+        msg: {
+            text: string;
+            attachments?: any[];
+            messageId?: string;
+            webSearch?: boolean;
+            thinking?: string;
+            contextItems?: any[];
+        } | null,
+    ) => void;
     generationStatus: string | null;
     // Project suggestion (shown after first message in a new chat)
     suggestedProjectId: string | null;
     classifiedText: string | null;
     clearProjectSuggestion: () => void;
-    // Session-level classification (blocks first send until project is resolved)
-    pendingMessage: string | null;
-    suggestedProjectForSession: import('../main/models').Project | null;
-    sessionClassified: boolean;
-    clearProjectSuggestionForSession: () => void;
-    confirmProjectSuggestionForSession: () => void;
 }
-
 
 export interface Model {
     id: string;

@@ -5,7 +5,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kliuchnikovv/genie-api/internal/credentials"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
 
@@ -242,11 +241,4 @@ func (h *CredentialsHandler) Request(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "requires_input": false})
-}
-
-// enrichCommandWithRedisCredentials adds credentials from Redis to the command
-func (h *CredentialsHandler) enrichCommandWithRedisCredentials(user *storage.User, command string) string {
-	// This will be used by stream.go to add credentials to the command sent to Python
-	// Implementation will be added when we update stream.go
-	return command
 }

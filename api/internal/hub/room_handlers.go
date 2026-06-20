@@ -392,25 +392,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 		ctx := context.Background()
 
-		// Resolve agent storage mode and fetch history BEFORE saving the current
-		// message so it is not duplicated in both the history payload and the
-		// "new message" field sent to Python.
-		agentStorageMode := "payload"
-		if user, err := r.store.GetUserByID(ctx, r.initiatorID); err == nil && user.AgentStorageMode != "" {
-			agentStorageMode = user.AgentStorageMode
-		}
-		var historyMessages []*chat.Message
-		if agentStorageMode != "agno" {
-			var err error
-			historyMessages, err = r.store.GetMessages(ctx, r.initiatorID, r.ID, 50)
-			if err != nil {
-				r.logger.Warn("failed to load history for bundling", zap.Error(err))
-				// The agent will reply without prior context — tell the user rather
-				// than silently degrading the conversation.
-				r.sendWarningFrame("history_unavailable", "Couldn't load earlier messages; replying without full context.")
-			}
-		}
-
+		// Agno owns session history via PostgresDb; Go does not bundle history into the payload.
 		err := r.store.UpsertMessage(ctx, senderID, &chat.Message{
 			ID:        msgID,
 			ChatID:    r.ID,
@@ -962,7 +944,6 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 		// Ensure user_id is present in finalMap
 		finalMap["user_id"] = r.initiatorID.String()
-		finalMap["agent_storage_mode"] = agentStorageMode
 		finalMap["streaming"] = r.hub.Streaming(payload.Model)
 		// Stable request id for ACK tracking + brain-side idempotency (= message UUID).
 		finalMap["request_id"] = msgID.String()
@@ -1014,17 +995,6 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 					"icon":        project.Icon,
 				}
 			}
-		}
-
-		if len(historyMessages) > 0 {
-			historyData := make([]map[string]interface{}, 0, len(historyMessages))
-			for _, msg := range historyMessages {
-				historyData = append(historyData, map[string]interface{}{
-					"role":    string(msg.Role),
-					"content": msg.Text,
-				})
-			}
-			finalMap["history"] = historyData
 		}
 
 		// Update frame payload with the map

@@ -181,7 +181,6 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req *GoogleLoginRequest) 
 type UpdateUserRequest struct {
 	WebSearchEnabled *bool   `json:"web_search_enabled"`
 	SingleChatMode   *bool   `json:"single_chat_mode"`
-	AgentStorageMode *string `json:"agent_storage_mode"`
 	VoiceSource      *string `json:"voice_source"`
 	ProactiveEnabled *bool   `json:"proactive_enabled"`
 	// Timezone is an IANA name (e.g. "Europe/Moscow"); nil = leave unchanged.
@@ -197,11 +196,6 @@ func (s *AuthService) UpdateUser(ctx context.Context, user *storage.User, req *U
 	}
 	if req.SingleChatMode != nil {
 		user.SingleChatMode = *req.SingleChatMode
-	}
-	if req.AgentStorageMode != nil {
-		if *req.AgentStorageMode == "agno" || *req.AgentStorageMode == "payload" {
-			user.AgentStorageMode = *req.AgentStorageMode
-		}
 	}
 	if req.VoiceSource != nil {
 		if *req.VoiceSource == "on_device" || *req.VoiceSource == "server_gemini" {

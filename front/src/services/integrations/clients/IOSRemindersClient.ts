@@ -3,8 +3,13 @@
  * Uses React Native module to access EventKit Reminders
  */
 
-import { NativeModules, Platform } from 'react-native';
-import { ragApi } from '../../../apiClient';
+import { NativeModules } from 'react-native';
+import {
+    checkIOSPermissionStatus,
+    openIOSPermissionSettings,
+    requestIOSPermission,
+} from './iosPermissions';
+import { indexItemsForRAG } from './iosRagIndex';
 
 const { IOSRemindersManager } = NativeModules;
 
@@ -141,35 +146,26 @@ class IOSRemindersClient {
      * Index reminders into backend RAG store
      */
     async indexForRAG(integrationId: string): Promise<void> {
-        if (Platform.OS !== 'ios') {
-            console.warn('[IOSRemindersClient] RAG indexing is iOS only');
-            return;
-        }
-
-        try {
-            const now = new Date();
-            const thirtyDaysLater = new Date(
-                now.getTime() + 30 * 24 * 60 * 60 * 1000,
-            );
-
-            const reminders = await this.getReminders(
-                undefined,
-                false,
-                now.toISOString(),
-                thirtyDaysLater.toISOString(),
-                100,
-            );
-
-            const PRIORITY_LABEL: Record<number, string> = {
-                1: 'HIGH',
-                5: 'MEDIUM',
-                9: 'LOW',
-            };
-
-            console.log(
-                `[IOSRemindersClient] Indexing ${reminders.length} reminders:`,
-            );
-            for (const reminder of reminders) {
+        const PRIORITY_LABEL: Record<number, string> = {
+            1: 'HIGH',
+            5: 'MEDIUM',
+            9: 'LOW',
+        };
+        const now = new Date();
+        const thirtyDaysLater = new Date(
+            now.getTime() + 30 * 24 * 60 * 60 * 1000,
+        );
+        await indexItemsForRAG<Reminder>(
+            'IOSRemindersClient',
+            () =>
+                this.getReminders(
+                    undefined,
+                    false,
+                    now.toISOString(),
+                    thirtyDaysLater.toISOString(),
+                    100,
+                ),
+            reminder => {
                 const priorityLabel =
                     PRIORITY_LABEL[reminder.priority] ??
                     (reminder.priority > 0 ? `p${reminder.priority}` : 'none');
@@ -183,7 +179,6 @@ class IOSRemindersClient {
                         reminder.list ? ` (${reminder.list})` : ''
                     }`,
                 );
-
                 let content = `Reminder: ${reminder.title}.`;
                 if (reminder.notes) content += ` Notes: ${reminder.notes}.`;
                 if (reminder.dueDate)
@@ -191,25 +186,18 @@ class IOSRemindersClient {
                         reminder.dueDate,
                     ).toLocaleString()}.`;
                 if (reminder.list) content += ` List: ${reminder.list}.`;
-
-                await ragApi.index({
+                return {
                     id: `ios_reminders_${integrationId}_${reminder.id}`,
-                    source_type: 'ios_reminder',
+                    sourceType: 'ios_reminder',
                     content,
                     metadata: {
                         integrationId,
                         reminderId: reminder.id,
                         list: reminder.list,
                     },
-                });
-            }
-
-            console.log(
-                `[IOSRemindersClient] Indexed ${reminders.length} reminders for RAG`,
-            );
-        } catch (error) {
-            console.error('[IOSRemindersClient] indexForRAG error:', error);
-        }
+                };
+            },
+        );
     }
 
     /**
@@ -219,65 +207,22 @@ class IOSRemindersClient {
         await this.indexForRAG(integrationId);
     }
 
-    /**
-     * Check current permission status for Reminders access
-     */
-    async checkPermissionStatus(): Promise<
-        'authorized' | 'denied' | 'notDetermined'
-    > {
-        if (!IOSRemindersManager) {
-            throw new Error('IOSRemindersManager is not available.');
-        }
-
-        try {
-            const status: string =
-                await IOSRemindersManager.checkPermissionStatus();
-            return status as 'authorized' | 'denied' | 'notDetermined';
-        } catch (error) {
-            console.error(
-                '[IOSRemindersClient] checkPermissionStatus error:',
-                error,
-            );
-            throw error;
-        }
+    checkPermissionStatus() {
+        return checkIOSPermissionStatus(
+            IOSRemindersManager,
+            'IOSRemindersClient',
+        );
     }
 
-    /**
-     * Request permission to access Reminders
-     * @returns true if permission granted, false if denied
-     */
-    async requestPermission(): Promise<boolean> {
-        if (!IOSRemindersManager) {
-            throw new Error('IOSRemindersManager is not available.');
-        }
-
-        try {
-            const granted: boolean =
-                await IOSRemindersManager.requestPermission();
-            return granted;
-        } catch (error) {
-            console.error(
-                '[IOSRemindersClient] requestPermission error:',
-                error,
-            );
-            throw error;
-        }
+    requestPermission() {
+        return requestIOSPermission(IOSRemindersManager, 'IOSRemindersClient');
     }
 
-    /**
-     * Open iOS Settings app to manage Reminders permissions
-     */
-    async openSettings(): Promise<void> {
-        if (!IOSRemindersManager) {
-            throw new Error('IOSRemindersManager is not available.');
-        }
-
-        try {
-            await IOSRemindersManager.openSettings();
-        } catch (error) {
-            console.error('[IOSRemindersClient] openSettings error:', error);
-            throw error;
-        }
+    openSettings() {
+        return openIOSPermissionSettings(
+            IOSRemindersManager,
+            'IOSRemindersClient',
+        );
     }
 }
 

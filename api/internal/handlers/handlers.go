@@ -3,15 +3,10 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
-
-func HelloWorld(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello, World!")
-}
 
 // userFromCtx extracts the authenticated user from context
 // Accepts an interface with a Value method for compatibility with context.Context and gin.Context

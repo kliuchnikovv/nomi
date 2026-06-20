@@ -818,9 +818,7 @@ class AgentFactory:
                 )
                 logger.info("[Factory] Built PlannerAgent for agent_type=planner")
             else:
-                use_agno_sessions = (
-                    storage_backend is not None and storage_backend.use_agno_sessions()
-                )
+                use_agno_sessions = storage_backend is not None
                 # Session summaries require the model to return structured JSON.
                 # Only Claude models do this reliably; others (GLM, Gemini, etc.)
                 # return empty or unstructured responses, causing parse failures.

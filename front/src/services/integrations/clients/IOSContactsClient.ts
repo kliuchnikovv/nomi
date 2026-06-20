@@ -3,8 +3,13 @@
  * Uses React Native module to access Contacts Framework
  */
 
-import { NativeModules, Platform } from 'react-native';
-import { ragApi } from '../../../apiClient';
+import { NativeModules } from 'react-native';
+import {
+    checkIOSPermissionStatus,
+    openIOSPermissionSettings,
+    requestIOSPermission,
+} from './iosPermissions';
+import { indexItemsForRAG } from './iosRagIndex';
 
 const { IOSContactsManager } = NativeModules;
 
@@ -51,67 +56,42 @@ export interface ContactGroup {
 }
 
 class IOSContactsClient {
-    /**
-     * Check current permission status for Contacts access
-     */
-    async checkPermissionStatus(): Promise<'authorized' | 'denied' | 'notDetermined'> {
-        if (!IOSContactsManager) {
-            throw new Error('IOSContactsManager is not available.');
-        }
-
-        try {
-            const status: string = await IOSContactsManager.checkPermissionStatus();
-            return status as 'authorized' | 'denied' | 'notDetermined';
-        } catch (error) {
-            console.error('[IOSContactsClient] checkPermissionStatus error:', error);
-            throw error;
-        }
+    checkPermissionStatus() {
+        return checkIOSPermissionStatus(
+            IOSContactsManager,
+            'IOSContactsClient',
+        );
     }
 
-    /**
-     * Request permission to access Contacts
-     * @returns true if permission granted, false if denied
-     */
-    async requestPermission(): Promise<boolean> {
-        if (!IOSContactsManager) {
-            throw new Error('IOSContactsManager is not available.');
-        }
-
-        try {
-            const granted: boolean = await IOSContactsManager.requestPermission();
-            return granted;
-        } catch (error) {
-            console.error('[IOSContactsClient] requestPermission error:', error);
-            throw error;
-        }
+    requestPermission() {
+        return requestIOSPermission(IOSContactsManager, 'IOSContactsClient');
     }
 
-    /**
-     * Open iOS Settings app to manage Contacts permissions
-     */
-    async openSettings(): Promise<void> {
-        if (!IOSContactsManager) {
-            throw new Error('IOSContactsManager is not available.');
-        }
-
-        try {
-            await IOSContactsManager.openSettings();
-        } catch (error) {
-            console.error('[IOSContactsClient] openSettings error:', error);
-            throw error;
-        }
+    openSettings() {
+        return openIOSPermissionSettings(
+            IOSContactsManager,
+            'IOSContactsClient',
+        );
     }
 
     /**
      * Search contacts by name, email, or phone
      */
-    async searchContacts(query: string, limit: number = 10): Promise<Contact[]> {
+    async searchContacts(
+        query: string,
+        limit: number = 10,
+    ): Promise<Contact[]> {
         if (!IOSContactsManager) {
-            throw new Error('IOSContactsManager is not available. Make sure iOS native module is properly linked.');
+            throw new Error(
+                'IOSContactsManager is not available. Make sure iOS native module is properly linked.',
+            );
         }
 
         try {
-            const contacts: Contact[] = await IOSContactsManager.searchContacts(query, limit);
+            const contacts: Contact[] = await IOSContactsManager.searchContacts(
+                query,
+                limit,
+            );
             return contacts;
         } catch (error) {
             console.error('[IOSContactsClient] searchContacts error:', error);
@@ -146,7 +126,10 @@ class IOSContactsClient {
     /**
      * Update an existing contact
      */
-    async updateContact(id: string, updates: Partial<Contact>): Promise<Contact> {
+    async updateContact(
+        id: string,
+        updates: Partial<Contact>,
+    ): Promise<Contact> {
         if (!IOSContactsManager) {
             throw new Error('IOSContactsManager is not available.');
         }
@@ -182,34 +165,34 @@ class IOSContactsClient {
      * Index contacts into backend RAG store
      */
     async indexForRAG(integrationId: string): Promise<void> {
-        if (Platform.OS !== 'ios') {
-            console.warn('[IOSContactsClient] RAG indexing is iOS only');
-            return;
-        }
-
-        try {
-            const contacts = await this.searchContacts('', 500);
-
-            for (const contact of contacts) {
-                const fullName = [contact.givenName, contact.familyName].filter(Boolean).join(' ');
+        await indexItemsForRAG<Contact>(
+            'IOSContactsClient',
+            () => this.searchContacts('', 500),
+            contact => {
+                const fullName = [contact.givenName, contact.familyName]
+                    .filter(Boolean)
+                    .join(' ');
                 let content = `Contact: ${fullName}.`;
-                if (contact.organization) content += ` Works at ${contact.organization}.`;
-                if (contact.jobTitle) content += ` Position: ${contact.jobTitle}.`;
-                if (contact.phoneNumbers.length > 0) content += ` Phones: ${contact.phoneNumbers.map(p => p.value).join(', ')}.`;
-                if (contact.emailAddresses.length > 0) content += ` Emails: ${contact.emailAddresses.map(e => e.value).join(', ')}.`;
-
-                await ragApi.index({
+                if (contact.organization)
+                    content += ` Works at ${contact.organization}.`;
+                if (contact.jobTitle)
+                    content += ` Position: ${contact.jobTitle}.`;
+                if (contact.phoneNumbers.length > 0)
+                    content += ` Phones: ${contact.phoneNumbers
+                        .map(p => p.value)
+                        .join(', ')}.`;
+                if (contact.emailAddresses.length > 0)
+                    content += ` Emails: ${contact.emailAddresses
+                        .map(e => e.value)
+                        .join(', ')}.`;
+                return {
                     id: `ios_contacts_${integrationId}_${contact.id}`,
-                    source_type: 'ios_contact',
+                    sourceType: 'ios_contact',
                     content,
                     metadata: { integrationId, contactId: contact.id },
-                });
-            }
-
-            console.log(`[IOSContactsClient] Indexed ${contacts.length} contacts for RAG`);
-        } catch (error) {
-            console.error('[IOSContactsClient] indexForRAG error:', error);
-        }
+                };
+            },
+        );
     }
 
     /**

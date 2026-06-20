@@ -231,10 +231,6 @@ class JudgeWorker:
                     "payload": event.get("payload", {}),
                 },
                 "user_id": user_id,
-                # Pass through agent_storage_mode if present
-                **({
-                    "agent_storage_mode": event["agent_storage_mode"]
-                } if "agent_storage_mode" in event else {}),
             }
             frame = Frame(
                 id=0,

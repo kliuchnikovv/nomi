@@ -17,8 +17,7 @@ from agno.memory.manager import MemoryManager
 from agno.models.message import Message
 from src.agents.factory import AgentFactory
 from src.agents.nomi import NomiAgent, build_learning_machine
-from src.storage.backend import PayloadBackend, StorageBackend
-from src.storage.factory import create_storage_backend
+from src.storage.backend import AgnoBackend
 from src.constants import Redis as RedisConstants
 from src.server import stub_brain
 from src.server.models import Frame, Op, Kind
@@ -173,9 +172,6 @@ class RedisSession:
         self.next_id = 0
         self.cancel_event = asyncio.Event()
 
-        # History storage
-        self.chat_history: list[dict[str, Any]] = []
-
         # Single chat mode state
         self.single_chat_mode: bool = False  # Set from session state payload
         self.byok: dict[str, str] = {}  # BYOK LLM keys; set from payload
@@ -198,8 +194,8 @@ class RedisSession:
         # onto the response meta frame so the client renders badge + deep-link.
         self._proactive_meta: dict[str, Any] | None = None
 
-        # Storage backend (set per-request from agent_storage_mode flag)
-        self.storage_backend: StorageBackend = PayloadBackend(chat_history=[])
+        # Storage backend (Agno owns session history via PostgresDb)
+        self.storage_backend: AgnoBackend = AgnoBackend(session_id="")
 
         # Per-session client tool result handling
         self.pubsub: Any | None = None
@@ -1197,21 +1193,6 @@ class RedisSession:
 
         return params
 
-    def _parse_history(self, payload: Any):
-        if payload and isinstance(payload, dict):
-            history_data = payload.get("history", [])
-            if isinstance(history_data, list):
-                for msg in history_data:
-                    if isinstance(msg, dict):
-                        self.chat_history.append(
-                            {
-                                "role": msg.get("role", "user"),
-                                "content": msg.get("text") or msg.get("content", ""),
-                                "id": msg.get("id", ""),
-                                "timestamp": msg.get("created_at") or msg.get("timestamp", ""),
-                            }
-                        )
-
     async def _extract_and_store_facts(self, text: str) -> None:
         """
         Run memory extraction in background: extract facts from current message + recent
@@ -1243,17 +1224,8 @@ class RedisSession:
                 user_id=user_id,
                 debug_mode=getattr(self.agent_factory, "_debug_mode", False),
             )
-            last_n = 5
-            history_snippet = ""
-            if self.chat_history:
-                recent = self.chat_history[-last_n:]
-                lines = [
-                    f"{'User' if h['role'] == 'user' else 'Assistant'}: {h['content']}"
-                    for h in recent
-                ]
-                history_snippet = "Conversation:\n" + "\n".join(lines) + "\n\n"
             prompt = (
-                f"{history_snippet}User message: {text.strip()}\n\n"
+                f"User message: {text.strip()}\n\n"
                 "Extract 0-5 facts/preferences/constraints to remember (one per line, clear standalone statements)."
             )
             response = await memoriser.arun(prompt, stream=False)
@@ -1442,13 +1414,8 @@ class RedisSession:
                     await self._send_frame(make_frame(self.next_id))
                 return
 
-        # 0a. Build storage backend based on per-user feature flag
-        agent_storage_mode = payload.get("agent_storage_mode", "payload")
-        self.storage_backend = create_storage_backend(
-            agent_storage_mode=agent_storage_mode,
-            chat_history=payload.get("history") or [],
-            session_id=self.session_id,
-        )
+        # 0a. Storage backend (Agno owns session history via PostgresDb)
+        self.storage_backend = AgnoBackend(session_id=self.session_id)
 
         # 0b. Extract plugin delivery context from payload
         self._delivery_source = payload.get("source")
@@ -1473,14 +1440,7 @@ class RedisSession:
                 k: v for k, v in payload.items() if k not in standard_keys
             }
 
-        # 1. Check and update chat history (payload mode only; agno mode loads history internally)
-        incoming_history = payload.get("history")
-        if incoming_history and isinstance(self.storage_backend, PayloadBackend):
-            # Replace history on each message to avoid duplication across reused sessions
-            self.chat_history = []
-            self._parse_history(payload)
-
-        # 2. Check and update tools/commands
+        # 1. Tools/commands
         if payload.get("tools") or payload.get("command") or payload.get("team"):
             self._parse_tools(payload)
             # If tools updated, we might need to assume agent needs rebuild (which happens below anyway)
@@ -1650,18 +1610,7 @@ class RedisSession:
                         )
                         done_sent = True
 
-                        # Archive old messages if context window is too full
-                        # (payload mode only; agno mode compresses via enable_session_summaries)
-                        if isinstance(self.storage_backend, PayloadBackend):
-                            try:
-                                await self._maybe_archive_old_messages()
-                            except asyncio.CancelledError:
-                                raise
-                            except Exception as _arch_err:
-                                logger.warning(
-                                    "[RedisSession] _maybe_archive_old_messages failed (non-fatal): %s",
-                                    _arch_err,
-                                )
+                        # Context compression handled by Agno via enable_session_summaries
 
                         # Deliver to external channel via plugin delivery handler
                         if delivery_handler:
@@ -1960,23 +1909,6 @@ class RedisSession:
         async for event in self._iterate_agent_stream(result):
             yield event
 
-    def _build_history_messages(self, current_text: str) -> list:
-        """Build a list of Agno Message objects from chat_history + current message.
-
-        Used by PayloadBackend mode so the LLM sees proper multi-turn messages
-        instead of an embedded history text block in a single user message.
-        """
-        from agno.models.message import Message
-
-        msgs = [
-            Message(role=h["role"], content=h["content"])
-            for h in self.chat_history
-            if h.get("content")
-        ]
-        if current_text and current_text.strip():
-            msgs.append(Message(role="user", content=current_text))
-        return msgs
-
     def _build_agent_input(self, text: str) -> str:
         """Build agent input with context items and accumulated tool results."""
         context_parts = []
@@ -2153,14 +2085,8 @@ class RedisSession:
         #   - def fn returning plain value → pass through
         async def run_fn(fn):
             inp = agent_input
-            if isinstance(inp, str):
-                from src.storage.backend import PayloadBackend
-                if self.chat_history and isinstance(self.storage_backend, PayloadBackend):
-                    # Pass full multi-turn history so the LLM sees real conversation
-                    # turns rather than an embedded text block in a single user message.
-                    inp = self._build_history_messages(inp)
-                elif not (inp and inp.strip()):
-                    inp = "[continue from previous context]"
+            if isinstance(inp, str) and not (inp and inp.strip()):
+                inp = "[continue from previous context]"
 
             result = fn(inp, stream=True, stream_events=True, **kwargs)
             if asyncio.iscoroutine(result):
@@ -2447,86 +2373,6 @@ class RedisSession:
                     )
 
         return "\n\n".join(descriptions)
-
-    async def _maybe_archive_old_messages(self) -> None:
-        """Archive oldest messages to pgvector when history exceeds 75% of context window.
-        Only runs when single_chat_mode is True.
-        """
-        if not self.single_chat_mode or not self.current_model_name:
-            return
-        if not self.chat_history:
-            return
-
-        context_limit = self._get_model_context_limit(self.current_model_name)
-        token_count = sum(len(m.get("content", "")) for m in self.chat_history) // 4
-
-        if token_count <= 0.75 * context_limit:
-            return
-
-        target_tokens = int(0.50 * context_limit)
-        to_archive = []
-        running = token_count
-
-        for msg in self.chat_history:  # oldest first
-            if running <= target_tokens:
-                break
-            to_archive.append(msg)
-            running -= len(msg.get("content", "")) // 4
-
-        if not to_archive:
-            return
-
-        # Index to pgvector
-        if self.agent_factory._knowledge is not None:
-            from agno.knowledge.document import Document
-            from datetime import datetime as _dt, timezone as _tz
-
-            for msg in to_archive:
-                try:
-                    doc = Document(
-                        content=msg.get("content", ""),
-                        meta={
-                            "user_id": self.user_id or "",
-                            "source": "chat_history",
-                            "role": msg.get("role", "unknown"),
-                            "timestamp": msg.get(
-                                "timestamp", _dt.now(_tz.utc).isoformat()
-                            ),
-                            "chat_id": self.chat_id,
-                            "message_id": msg.get("id", ""),
-                        },
-                    )
-                    self.agent_factory._knowledge.insert(doc)
-                except Exception as exc:
-                    logger.warning(
-                        "[RedisSession] Failed to index message to pgvector: %s", exc
-                    )
-
-        # Mark archived in Go API
-        message_ids = [m["id"] for m in to_archive if m.get("id")]
-        if message_ids:
-            api_url = os.getenv("API_URL", "http://localhost:8080")
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.post(
-                        f"{api_url}/api/chats/{self.chat_id}/archive-messages",
-                        json={"message_ids": message_ids},
-                    )
-                    if resp.status_code not in (200, 204):
-                        logger.warning(
-                            "[RedisSession] archive-messages returned %d",
-                            resp.status_code,
-                        )
-            except Exception as exc:
-                logger.warning(
-                    "[RedisSession] Failed to call archive-messages: %s", exc
-                )
-
-        # Remove from local history
-        archived_ids = {m.get("id") for m in to_archive}
-        self.chat_history = [
-            m for m in self.chat_history if m.get("id") not in archived_ids
-        ]
 
     async def _repair_dangling_tool_calls(self, agent: Any) -> bool:
         """Repairs dangling tool calls in agent history."""

@@ -81,7 +81,7 @@ function formatTime(value?: number | null): string {
 export function ChatListScreen() {
     const navigation = useNavigation<NavProp>();
     const insets = useSafeAreaInsets();
-    const { theme } = useTheme();
+    const { theme, palette } = useTheme();
     const { user } = useAuth();
     const {
         chats,
@@ -104,7 +104,7 @@ export function ChatListScreen() {
     const filters = useMemo(() => {
         const list: { id: string; title: string; color: string }[] = [
             { id: 'agent', title: 'Nomi', color: theme.success || '#9ECE6A' },
-            { id: 'planner', title: 'Planner', color: '#FF9E64' },
+            { id: 'planner', title: 'Planner', color: palette.orange },
         ];
         AVAILABLE_TEAMS.forEach(t => {
             list.push({
@@ -217,7 +217,7 @@ export function ChatListScreen() {
             if (sidebarFilter === 'all') {
                 if (isPlannerChat(item)) {
                     badgeLabel = 'Planner';
-                    badgeColor = '#FF9E64';
+                    badgeColor = palette.orange;
                 } else if (item.mode === 'team') {
                     const team = AVAILABLE_TEAMS.find(
                         t => t.id === item.team_id,

@@ -42,8 +42,3 @@ func wrapWithAuth(h gin.HandlerFunc, authMiddleware *auth.AuthMiddleware) gin.Ha
 		wrapped(c)
 	}
 }
-
-// wrapWithAuthHttp wraps http.HandlerFunc with auth middleware
-func wrapWithAuthHttp(h http.HandlerFunc, authMiddleware *auth.AuthMiddleware) gin.HandlerFunc {
-	return gin.WrapH(authMiddleware.RequireAuth(h))
-}

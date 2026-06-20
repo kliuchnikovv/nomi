@@ -93,9 +93,6 @@ func New(
 		watchHandler        = watch.NewHandler(ctr.Storage)
 	)
 
-	// existing handlers are standard http handlers; wrap them so they work
-	r.GET("/", gin.WrapF(http.HandlerFunc(handlers.HelloWorld)))
-
 	// Health check endpoint for Railway zero-downtime deployments
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

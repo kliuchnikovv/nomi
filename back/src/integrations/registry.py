@@ -90,46 +90,6 @@ def get_provider(name: str) -> Optional[ProviderDefinition]:
     return REGISTRY.get(name_lower)
 
 
-def get_server_side_providers() -> dict[str, ProviderDefinition]:
-    """Get all server-side providers."""
-    out: dict[str, ProviderDefinition] = {}
-    try:
-        from src.plugins.loader import get_manifests, load_plugins
-        load_plugins()
-        for m in get_manifests():
-            exec_type = (m.get("execution") or {}).get("type", "")
-            if exec_type in ("server", "hybrid"):
-                name = m.get("name", "")
-                if name:
-                    out[name] = _manifest_to_provider(name, m)
-    except Exception:
-        pass
-    for name, p in REGISTRY.items():
-        if p.tool_type == ToolType.SERVER_SIDE:
-            out[name] = p
-    return out
-
-
-def get_client_side_providers() -> dict[str, ProviderDefinition]:
-    """Get all client-side providers."""
-    out: dict[str, ProviderDefinition] = {}
-    try:
-        from src.plugins.loader import get_manifests, load_plugins
-        load_plugins()
-        for m in get_manifests():
-            exec_type = (m.get("execution") or {}).get("type", "")
-            if exec_type == "client":
-                name = m.get("name", "")
-                if name:
-                    out[name] = _manifest_to_provider(name, m)
-    except Exception:
-        pass
-    for name, p in REGISTRY.items():
-        if p.tool_type == ToolType.CLIENT_SIDE:
-            out[name] = p
-    return out
-
-
 def is_server_side(provider_name: str) -> bool:
     """Check if provider is server-side."""
     try:
@@ -141,14 +101,6 @@ def is_server_side(provider_name: str) -> bool:
         pass
     p = REGISTRY.get(provider_name.lower())
     return p is not None and p.tool_type == ToolType.SERVER_SIDE
-
-
-def is_client_side(provider_name: str) -> bool:
-    """Check if provider is client-side."""
-    p = get_provider(provider_name)
-    if not p:
-        return False
-    return p.tool_type == ToolType.CLIENT_SIDE
 
 
 def should_include_in_tools(provider_name: str) -> bool:

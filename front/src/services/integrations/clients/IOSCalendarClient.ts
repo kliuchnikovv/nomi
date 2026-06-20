@@ -3,8 +3,8 @@
  * Uses React Native module to access EventKit
  */
 
-import { NativeModules, Platform } from 'react-native';
-import { ragApi } from '../../../apiClient';
+import { NativeModules } from 'react-native';
+import { indexItemsForRAG } from './iosRagIndex';
 
 const { IOSCalendarManager } = NativeModules;
 
@@ -147,47 +147,35 @@ class IOSCalendarClient {
      * Index events into backend RAG store
      */
     async indexForRAG(integrationId: string): Promise<void> {
-        if (Platform.OS !== 'ios') {
-            console.warn('[IOSCalendarClient] RAG indexing is iOS only');
-            return;
-        }
-
-        try {
-            const now = new Date();
-            const thirtyDaysAgo = new Date(
-                now.getTime() - 30 * 24 * 60 * 60 * 1000,
-            );
-            const thirtyDaysLater = new Date(
-                now.getTime() + 30 * 24 * 60 * 60 * 1000,
-            );
-
-            const events = await this.getEvents(
-                thirtyDaysAgo.toISOString(),
-                thirtyDaysLater.toISOString(),
-                100,
-            );
-
-            for (const event of events) {
+        const now = new Date();
+        const thirtyDaysAgo = new Date(
+            now.getTime() - 30 * 24 * 60 * 60 * 1000,
+        );
+        const thirtyDaysLater = new Date(
+            now.getTime() + 30 * 24 * 60 * 60 * 1000,
+        );
+        await indexItemsForRAG<CalendarEvent>(
+            'IOSCalendarClient',
+            () =>
+                this.getEvents(
+                    thirtyDaysAgo.toISOString(),
+                    thirtyDaysLater.toISOString(),
+                    100,
+                ),
+            event => {
                 let content = `Event: ${event.title}. Date: ${new Date(
                     event.start,
                 ).toLocaleString()} - ${new Date(event.end).toLocaleString()}.`;
                 if (event.location) content += ` Location: ${event.location}.`;
                 if (event.notes) content += ` Notes: ${event.notes}.`;
-
-                await ragApi.index({
+                return {
                     id: `ios_calendar_${integrationId}_${event.id}`,
-                    source_type: 'ios_calendar_event',
+                    sourceType: 'ios_calendar_event',
                     content,
                     metadata: { integrationId, eventId: event.id },
-                });
-            }
-
-            console.log(
-                `[IOSCalendarClient] Indexed ${events.length} events for RAG`,
-            );
-        } catch (error) {
-            console.error('[IOSCalendarClient] indexForRAG error:', error);
-        }
+                };
+            },
+        );
     }
 
     /**
