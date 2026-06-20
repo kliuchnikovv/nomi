@@ -139,10 +139,6 @@ export function ChatDetailScreen() {
         suggestedProjectId,
         classifiedText,
         clearProjectSuggestion,
-        pendingMessage,
-        suggestedProjectForSession,
-        clearProjectSuggestionForSession,
-        confirmProjectSuggestionForSession,
         setPendingInputText,
     } = useChat();
     const { user, token } = useAuth();
@@ -305,24 +301,6 @@ export function ChatDetailScreen() {
         },
         [setPendingInputText],
     );
-
-    const handleAcceptSessionProjectSuggestion = useCallback(() => {
-        if (!suggestedProjectForSession) return;
-        confirmProjectSuggestionForSession();
-        (navigation as any).navigate('Projects', {
-            screen: 'ProjectChatDetail',
-            params: {
-                chatId: '',
-                projectId: suggestedProjectForSession.id,
-                pendingText: pendingMessage ?? undefined,
-            },
-        });
-    }, [
-        suggestedProjectForSession,
-        pendingMessage,
-        confirmProjectSuggestionForSession,
-        navigation,
-    ]);
 
     // When a project chat is opened from the "Add to project" suggestion with a
     // pending message, send it once on arrival so the conversation actually lands
@@ -1189,48 +1167,16 @@ export function ChatDetailScreen() {
                 ]}
             >
                 {/* Generated follow-up suggestion chips, shown once the reply is done */}
-                {!assistantWorking &&
-                    !suggestedProjectForSession &&
-                    !!followUps?.length && (
-                        <SuggestionChips
-                            suggestions={followUps}
-                            onPress={handleFollowUpPress}
-                            accentColor={theme.accent}
-                            surfaceColor={theme.surface}
-                            textPrimaryColor={theme.textPrimary}
-                        />
-                    )}
-                {/* Blocking new-session "Add to project?" banner. Temporarily
-                    disabled: `suggestedProjectForSession` is never set anymore
-                    (see ChatContext.sendMessage), so this never renders and the
-                    input is never dimmed. Kept here to make re-enabling trivial. */}
-                {suggestedProjectForSession && (
-                    <ProjectSuggestionBanner
-                        project={suggestedProjectForSession}
-                        onAccept={handleAcceptSessionProjectSuggestion}
-                        onDismiss={clearProjectSuggestionForSession}
+                {!assistantWorking && !!followUps?.length && (
+                    <SuggestionChips
+                        suggestions={followUps}
+                        onPress={handleFollowUpPress}
                         accentColor={theme.accent}
                         surfaceColor={theme.surface}
                         textPrimaryColor={theme.textPrimary}
-                        textSecondaryColor={theme.textSecondary}
-                        borderColor={theme.border}
-                        showNoButton={true}
                     />
                 )}
-                <Animated.View
-                    pointerEvents={
-                        pendingMessage && suggestedProjectForSession
-                            ? 'none'
-                            : 'auto'
-                    }
-                    style={{
-                        paddingBottom: insets.bottom,
-                        opacity:
-                            pendingMessage && suggestedProjectForSession
-                                ? 0.4
-                                : 1,
-                    }}
-                >
+                <Animated.View style={{ paddingBottom: insets.bottom }}>
                     {renderInputToolbarBase({})}
                 </Animated.View>
             </Animated.View>
