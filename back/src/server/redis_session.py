@@ -1419,8 +1419,11 @@ class RedisSession:
     async def _emit_command_result(self, source: Frame, result: CommandResult) -> None:
         """Emit a final op=done frame carrying the command_result in meta.
 
-        The id of the request frame is echoed back so the frontend's
-        pendingCommandCallsRef map can correlate the response.
+        Frame.id is overwritten downstream by GoWSClient.send_frame (it assigns
+        a globally-monotonic per-chat id for Go-side dedup), so it can't be
+        used for request/response correlation. Pass the source frame's id back
+        via ``corr_id`` instead; the frontend's pendingCommandCallsRef matches
+        on that.
         """
         body: dict[str, Any] = {
             "type": "text",
@@ -1432,19 +1435,21 @@ class RedisSession:
                     "data": result.data,
                     "error": result.error,
                     "question": result.question,
+                    "request_id": source.id,
                 }
             },
         }
         done = Frame(
-            id=source.id,
+            id=self.next_id,
             ts=datetime.now(timezone.utc),
             kind=Kind.DATA,
             op=Op.DONE,
             payload=body,
             chat_id=source.chat_id,
+            corr_id=str(source.id),
         )
         logger.info(
-            "[RedisSession] emitting command_result for frame %s ok=%s",
+            "[RedisSession] emitting command_result for source.id=%s ok=%s",
             source.id,
             result.ok,
         )
