@@ -498,7 +498,7 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 	err := s.DB.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"text", "reasoning", "tool_calls", "content_parts", "actions", "updated_at", "model",
+			"text", "reasoning", "tool_calls", "content_parts", "actions", "updated_at", "model", "meta",
 		}),
 	}).Create(messageModel).Error
 
