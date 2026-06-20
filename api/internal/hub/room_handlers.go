@@ -61,19 +61,7 @@ func (r *Room) sendErrorFrame(code string, message string, err error, traceID st
 		return
 	}
 	b = append(b, '\n') // NDJSON
-
-	for client := range r.clients {
-		if client.send == nil {
-			continue
-		}
-		select {
-		case client.send <- b:
-		default:
-			// Channel full, close and remove client
-			close(client.send)
-			delete(r.clients, client)
-		}
-	}
+	r.broadcastBytes(b, nil)
 }
 
 // sendWarningFrame surfaces a non-fatal degradation (e.g. some tools unavailable,
@@ -111,18 +99,7 @@ func (r *Room) sendWarningFrame(code string, message string) {
 		return
 	}
 	b = append(b, '\n')
-
-	for client := range r.clients {
-		if client.send == nil {
-			continue
-		}
-		select {
-		case client.send <- b:
-		default:
-			close(client.send)
-			delete(r.clients, client)
-		}
-	}
+	r.broadcastBytes(b, nil)
 }
 
 func (r *Room) InjectMessage(userID uuid.UUID, payload []byte) {
@@ -154,46 +131,20 @@ func (r *Room) HandleRemoteLLMFrame(frame Frame) {
 func (r *Room) handleUserMessage(msg *ClientMessage) {
 	// Helper to broadcast to all clients
 	broadcast := func(f Frame) {
-		// Just log op, not role (requires parsing)
 		r.logger.Info("broadcast to clients",
 			zap.Int("client_count", len(r.clients)),
 			zap.String("op", string(f.Operation)),
 		)
 		b, _ := json.Marshal(f)
 		b = append(b, '\n') // NDJSON
-		for client := range r.clients {
-			if client.send == nil {
-				continue
-			}
-			select {
-			case client.send <- b:
-			default:
-				close(client.send)
-				delete(r.clients, client)
-			}
-		}
+		r.broadcastBytes(b, nil)
 	}
 
 	// Helper to broadcast to all clients EXCEPT the sender
 	broadcastExcept := func(f Frame, sender *Client) {
 		b, _ := json.Marshal(f)
 		b = append(b, '\n') // NDJSON
-		for client := range r.clients {
-			// Skip sender if valid (might be nil for system messages)
-			if sender != nil && client == sender {
-				continue
-			}
-			// Skip clients with nil send channel (safety)
-			if client.send == nil {
-				continue
-			}
-			select {
-			case client.send <- b:
-			default:
-				close(client.send)
-				delete(r.clients, client)
-			}
-		}
+		r.broadcastBytes(b, sender)
 	}
 
 	// Parse
@@ -231,7 +182,10 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		}
 		// Call Python backend via HTTP
 		go func() {
-			pythonURL := os.Getenv("LLM_BASE_URL")
+			pythonURL := r.llmBaseURL
+			if pythonURL == "" {
+				pythonURL = os.Getenv("LLM_BASE_URL")
+			}
 			if pythonURL == "" {
 				pythonURL = "http://localhost:7777"
 			}
@@ -1204,21 +1158,12 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 	// Append newline for NDJSON
 	b = append(b, '\n')
 
-	clientCount := len(r.clients)
 	r.logger.Debug("broadcasting LLM frame",
-		zap.Int("client_count", clientCount),
+		zap.Int("client_count", len(r.clients)),
 		zap.String("kind", string(frame.Kind)),
 		zap.String("operation", string(frame.Operation)),
 	)
-
-	for client := range r.clients {
-		select {
-		case client.send <- b:
-		default:
-			close(client.send)
-			delete(r.clients, client)
-		}
-	}
+	r.broadcastBytes(b, nil)
 
 	// Buffer frame for reconnecting clients (capped at maxReplayBuf).
 	if r.generationInProgress || frame.Operation == MessageOperation {

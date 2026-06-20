@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -32,14 +31,4 @@ func userFromCtx(ctx interface{ Value(key any) any }) (*storage.User, error) {
 		return nil, fmt.Errorf("user not found in context")
 	}
 	return user, nil
-}
-
-// firstNonEmpty returns the first non-empty string from the provided arguments
-func firstNonEmpty(strs ...string) string {
-	for _, s := range strs {
-		if strings.TrimSpace(s) != "" {
-			return s
-		}
-	}
-	return ""
 }

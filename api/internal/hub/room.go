@@ -80,6 +80,9 @@ type Room struct {
 
 	// User timezone (e.g., "Europe/Moscow", "America/New_York")
 	timezone string
+
+	// Cached LLM base URL (Python backend) for direct HTTP calls like store_facts.
+	llmBaseURL string
 }
 
 func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, store *storage.Storage, logger *zap.Logger, llmBaseURL string, mode string, command string, timezone string) *Room {
@@ -102,6 +105,7 @@ func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, s
 		generationTimeoutCh: make(chan struct{}, 1),
 		ackCh:               make(chan string, 1),
 		timezone:            timezone,
+		llmBaseURL:          llmBaseURL,
 	}
 }
 
@@ -185,14 +189,7 @@ func (r *Room) Run() {
 				r.logger.Error("failed to marshal broadcast frame", zap.Error(err))
 				continue
 			}
-			for client := range r.clients {
-				select {
-				case client.send <- b:
-				default:
-					close(client.send)
-					delete(r.clients, client)
-				}
-			}
+			r.broadcastBytes(b, nil)
 
 		case <-timer.C:
 			if len(r.clients) == 0 && !r.generationInProgress {
@@ -237,6 +234,28 @@ func (r *Room) Run() {
 				}
 			}
 
+		}
+	}
+}
+
+// broadcastBytes fans out a pre-marshalled NDJSON payload to all connected
+// clients except `except` (pass nil to broadcast to everyone). Clients with a
+// full send channel are closed and removed — the same back-pressure policy
+// used everywhere in the hub. Safe to call inline; map deletion during range
+// is well-defined in Go.
+func (r *Room) broadcastBytes(b []byte, except *Client) {
+	for client := range r.clients {
+		if except != nil && client == except {
+			continue
+		}
+		if client.send == nil {
+			continue
+		}
+		select {
+		case client.send <- b:
+		default:
+			close(client.send)
+			delete(r.clients, client)
 		}
 	}
 }

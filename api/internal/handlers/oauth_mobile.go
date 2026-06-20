@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -13,7 +11,6 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/crypto"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
@@ -134,27 +131,14 @@ func (h *MobileOAuthHandler) Login(c *gin.Context) {
 	providerName := c.Param("provider")
 
 	// Check if the provider exists in the registry
-	_, ok := integrations.GetProvider(providerName)
+	provider, ok := integrations.GetProvider(providerName)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", providerName)})
 		return
 	}
 
-	// Get permissions for the provider
-	var permissions []string
-	switch providerName {
-	case "gmail":
-		permissions = []string{"gmail:read", "gmail:write"}
-	case "calendar":
-		permissions = []string{"calendar:read", "calendar:write"}
-	case "github":
-		permissions = []string{}
-	default:
-		permissions = []string{}
-	}
-
-	// Create OAuth config from registry
-	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, permissions)
+	// Create OAuth config from registry using its declared default permissions
+	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, provider.DefaultPermissions)
 	if err != nil {
 		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", providerName))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build OAuth configuration"})
@@ -184,27 +168,14 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 	providerName := c.Param("provider")
 
 	// Check if the provider exists in the registry
-	_, ok := integrations.GetProvider(providerName)
+	provider, ok := integrations.GetProvider(providerName)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", providerName)})
 		return
 	}
 
-	// Get permissions for the provider
-	var permissions []string
-	switch providerName {
-	case "gmail":
-		permissions = []string{"gmail:read", "gmail:write"}
-	case "calendar":
-		permissions = []string{"calendar:read", "calendar:write"}
-	case "github":
-		permissions = []string{}
-	default:
-		permissions = []string{}
-	}
-
-	// Create OAuth config from registry
-	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, permissions)
+	// Create OAuth config from registry using its declared default permissions
+	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, provider.DefaultPermissions)
 	if err != nil {
 		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", providerName))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "provider configuration missing"})
@@ -356,12 +327,8 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		zap.Bool("has_client_secret", oauthConfig.ClientSecret != ""),
 		zap.Bool("has_refresh_token", token.RefreshToken != ""),
 	)
-	// Determine token_uri by provider
-	if providerName == "github" {
-		payload.TokenURI = "https://github.com/login/oauth/access_token"
-	} else {
-		payload.TokenURI = "https://oauth2.googleapis.com/token"
-	}
+	// The OAuth endpoint (including TokenURL) is owned by the integrations registry.
+	payload.TokenURI = oauthConfig.Endpoint.TokenURL
 
 	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
@@ -377,7 +344,7 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		return
 	}
 
-	user, err := userFromCtxMobile(c.Request.Context())
+	user, err := userFromCtx(c.Request.Context())
 	if err != nil || user == nil {
 		h.logger.Warn("could not save tokens: user not found in context", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
@@ -438,25 +405,14 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	// Check if the provider exists in the registry
-	_, ok := integrations.GetProvider(req.Provider)
+	provider, ok := integrations.GetProvider(req.Provider)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", req.Provider)})
 		return
 	}
 
-	// Get permissions for the provider
-	var permissions []string
-	switch req.Provider {
-	case "gmail":
-		permissions = []string{"gmail:read", "gmail:write"}
-	case "calendar":
-		permissions = []string{"calendar:read", "calendar:write"}
-	default:
-		permissions = []string{}
-	}
-
-	// Create OAuth config from registry
-	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(req.Provider, permissions)
+	// Create OAuth config from registry using its declared default permissions
+	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(req.Provider, provider.DefaultPermissions)
 	if err != nil {
 		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", req.Provider))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "provider configuration missing"})
@@ -497,14 +453,15 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 func (h *MobileOAuthHandler) GetAccessToken(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	user, err := userFromCtxMobile(ctx)
+	user, err := userFromCtx(ctx)
 	if err != nil || user == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
 	providerName := c.Param("provider")
-	if _, ok := integrations.GetProvider(providerName); !ok {
+	provider, ok := integrations.GetProvider(providerName)
+	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", providerName)})
 		return
 	}
@@ -536,18 +493,7 @@ func (h *MobileOAuthHandler) GetAccessToken(c *gin.Context) {
 		return
 	}
 
-	// Permissions for the provider (mirrors RefreshToken).
-	var permissions []string
-	switch providerName {
-	case "gmail":
-		permissions = []string{"gmail:read", "gmail:write"}
-	case "calendar":
-		permissions = []string{"calendar:read", "calendar:write"}
-	default:
-		permissions = []string{}
-	}
-
-	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, permissions)
+	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, provider.DefaultPermissions)
 	if err != nil {
 		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", providerName))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "provider configuration missing"})
@@ -678,15 +624,6 @@ func (h *MobileOAuthHandler) StoreImapCredentials(c *gin.Context) {
 
 	h.logger.Info("stored imap credentials", zap.String("account_email", accountEmail))
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "account_email": accountEmail})
-}
-
-// userFromCtx is duplicated from oauth.go - consider refactoring
-func userFromCtxMobile(ctx context.Context) (*storage.User, error) {
-	user, ok := auth.GetUserFromContext(ctx)
-	if !ok || user == nil {
-		return nil, errors.New("user not found in context")
-	}
-	return user, nil
 }
 
 // UpdateStoredToken updates the access_token in the encrypted oauth_tokens record.

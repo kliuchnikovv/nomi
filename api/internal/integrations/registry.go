@@ -147,28 +147,6 @@ func GetProvider(name string) (*ProviderDefinition, bool) {
 	return provider, ok
 }
 
-// GetClientOnlyProviders returns list of ClientOnly providers
-func GetClientOnlyProviders() []*ProviderDefinition {
-	var provs []*ProviderDefinition
-	for _, provider := range Registry {
-		if provider.StorageType == StorageTypeClientOnly {
-			provs = append(provs, provider)
-		}
-	}
-	return provs
-}
-
-// GetServerProviders returns list of Server providers
-func GetServerProviders() []*ProviderDefinition {
-	var provs []*ProviderDefinition
-	for _, provider := range Registry {
-		if provider.StorageType == StorageTypeServer {
-			provs = append(provs, provider)
-		}
-	}
-	return provs
-}
-
 // ShouldSync checks if sync is required for provider
 func ShouldSync(providerName string) bool {
 	provider, ok := GetProvider(providerName)

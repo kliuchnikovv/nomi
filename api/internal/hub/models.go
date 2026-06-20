@@ -19,20 +19,9 @@ const (
 type Operation string
 
 const (
-	PingOperation        Operation = "ping"
-	ErrorOperation       Operation = "error"
-	MessageOperation     Operation = "message"
-	DoneOperation        Operation = "done"
-	ToolsOperation       Operation = "tools"
-	HistoryOperation     Operation = "history"
-	SelectModelOperation Operation = "select_model"
-	ChangeModelOperation Operation = "change_model"
-
-	AckOperation        Operation = "ack"
-	NackOperation       Operation = "nack"
-	JoinOperation       Operation = "join"
-	LeaveOperation      Operation = "leave"
-	PongOperation       Operation = "pong"
+	ErrorOperation      Operation = "error"
+	MessageOperation    Operation = "message"
+	DoneOperation       Operation = "done"
 	SignalOperation     Operation = "signal"
 	StoreFactsOperation Operation = "store_facts"
 	StopOperation       Operation = "stop"
