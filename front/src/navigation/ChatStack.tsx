@@ -1,12 +1,10 @@
 import React, { useEffect } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useRoute, RouteProp } from '@react-navigation/native';
-import { ChatListScreen } from '../screens/chat/chatList/ChatListScreen';
 import { ChatDetailScreen } from '../screens/chat/chatDetail/ChatDetailScreen';
 import { VoiceScreen } from '../screens/chat/voice/VoiceScreen';
 import { CommandScreen } from '../screens/chat/CommandScreen';
 import { useMain, emptyChatID } from '../screens/main/context';
-import { useAuth } from '../screens/auth/context';
 import { ChatProvider } from '../screens/chat/context';
 import { AskUserProvider } from '../screens/chat/AskUserContext';
 import type { ChatStackParamList } from './types';
@@ -28,8 +26,6 @@ function ChatDetailScreenWrapper() {
 export function ChatStack() {
     const { activeChatID, setActiveChatID, isNewSession, setIsNewSession } =
         useMain();
-    const { user } = useAuth();
-    const singleChatMode = !!user?.single_chat_mode;
 
     return (
         <ChatProvider
@@ -41,17 +37,8 @@ export function ChatStack() {
             <AskUserProvider>
                 <Stack.Navigator
                     screenOptions={{ headerShown: false }}
-                    initialRouteName={
-                        singleChatMode ? 'ChatDetail' : 'ChatList'
-                    }
+                    initialRouteName="ChatDetail"
                 >
-                    {!singleChatMode && (
-                        <Stack.Screen
-                            name="ChatList"
-                            component={ChatListScreen}
-                            options={{ title: 'Chats' }}
-                        />
-                    )}
                     <Stack.Screen
                         name="ChatDetail"
                         component={ChatDetailScreenWrapper}

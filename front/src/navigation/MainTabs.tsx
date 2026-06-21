@@ -13,7 +13,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../screens/auth/context';
 import { useMain, emptyChatID } from '../screens/main/context';
 
 // Height of the floating dock area above the safe-area inset.
@@ -153,7 +152,6 @@ function getTabIcon(
 function FloatingDock({ state, descriptors, navigation }: BottomTabBarProps) {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
-    const { user } = useAuth();
     const { activeChatID } = useMain();
 
     const translateX = useSharedValue(0);
@@ -224,18 +222,12 @@ function FloatingDock({ state, descriptors, navigation }: BottomTabBarProps) {
                             if (event.defaultPrevented) return;
 
                             if (route.name === 'Chat') {
-                                if (user?.single_chat_mode) {
-                                    navigation.navigate('Chat', {
-                                        screen: 'ChatDetail',
-                                        params: {
-                                            chatId: activeChatID || emptyChatID,
-                                        },
-                                    });
-                                } else {
-                                    navigation.navigate('Chat', {
-                                        screen: 'ChatList',
-                                    });
-                                }
+                                navigation.navigate('Chat', {
+                                    screen: 'ChatDetail',
+                                    params: {
+                                        chatId: activeChatID || emptyChatID,
+                                    },
+                                });
                                 return;
                             }
 
@@ -300,7 +292,6 @@ const dockStyles = StyleSheet.create({
 
 export function MainTabs() {
     const insets = useSafeAreaInsets();
-    const { user } = useAuth();
     const { activeChatID } = useMain();
     // Total tab bar height = icon area + device bottom inset
     const tabBarHeight = TAB_BAR_ICON_HEIGHT + insets.bottom;
@@ -323,17 +314,10 @@ export function MainTabs() {
                 listeners={({ navigation }) => ({
                     tabPress: e => {
                         e.preventDefault();
-                        if (user?.single_chat_mode) {
-                            // In single_chat_mode ChatList is not in the stack;
-                            // always open ChatDetail. Fall back to emptyChatID so
-                            // the welcome screen shows when no active chat exists yet.
-                            navigation.navigate('Chat', {
-                                screen: 'ChatDetail',
-                                params: { chatId: activeChatID || emptyChatID },
-                            });
-                        } else {
-                            navigation.navigate('Chat', { screen: 'ChatList' });
-                        }
+                        navigation.navigate('Chat', {
+                            screen: 'ChatDetail',
+                            params: { chatId: activeChatID || emptyChatID },
+                        });
                     },
                 })}
             />

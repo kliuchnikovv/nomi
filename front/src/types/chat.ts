@@ -53,21 +53,28 @@ export interface ChatContextType {
     selectTeam: (teamId: string) => void;
 
     // Actions
-    sendMessage: (text: string, options?: {
-        attachments?: any[];
-        webSearch?: boolean;
-        thinking?: string;
-        model?: string;
-        tools?: any[];
-        mode?: 'agent' | 'team';
-        teamId?: string;
-    }) => void;
+    sendMessage: (
+        text: string,
+        options?: {
+            attachments?: any[];
+            webSearch?: boolean;
+            thinking?: string;
+            model?: string;
+            tools?: any[];
+            mode?: 'agent' | 'team';
+            teamId?: string;
+        },
+    ) => void;
     retryMessage: (messageId: string) => void;
     editMessage: (messageId: string, newText: string) => void;
     stopGeneration: () => void;
 
     // Utility
-    mapPluginMessage: (msg: any, provider: string, fallbackRole?: 'assistant' | 'user') => Message;
+    mapPluginMessage: (
+        msg: any,
+        provider: string,
+        fallbackRole?: 'assistant' | 'user',
+    ) => Message;
 }
 
 export interface MainContextType {
@@ -77,14 +84,11 @@ export interface MainContextType {
     activeChat: Chat | null;
     getChats: (options?: GetChatsOptions) => Promise<void>;
     createNewChat: () => void;
-    createNewChatWithMode: (mode: 'agent' | 'team', teamId: string | null) => void;
     renameChat: (chatId: string, newTitle: string) => Promise<void>;
     deleteChat: (chatId: string) => void;
     setActiveChatID: (id: string | null) => void;
     sidebarFilter: string;
     setSidebarFilter: (filter: string) => void;
-    pendingChatMode?: { mode: 'agent' | 'team'; teamId: string | null; initialMessage?: string } | null;
-    clearPendingChatMode?: () => void;
     newTaskModalVisible: boolean;
     setNewTaskModalVisible: (visible: boolean) => void;
 }
@@ -108,5 +112,14 @@ export interface ChatProviderProps {
 }
 
 // Import Message, Chat, Model from api types
-import { Message, Chat, Frame, ContentPart, TextPart, ToolCallPart, ReasoningPart, MemberResponsePart } from './api';
+import {
+    Message,
+    Chat,
+    Frame,
+    ContentPart,
+    TextPart,
+    ToolCallPart,
+    ReasoningPart,
+    MemberResponsePart,
+} from './api';
 import { Model } from './integrations';

@@ -86,8 +86,10 @@ export function useGiftedMessages(messages: NomiMessage[], userId?: string) {
         for (let i = 0; i < sorted.length; i++) {
             const msg = sorted[i];
 
-            // Skip empty messages
-            if (!shouldShowMessage(msg)) continue;
+            // Skip empty messages — but keep command_call bubbles even
+            // though their text is empty (they render via meta.command_call).
+            if (!(msg as any)?.meta?.command_call && !shouldShowMessage(msg))
+                continue;
 
             const isUserMessage = msg.role === 'user';
             const isSystemMessage = msg.role === 'system';
@@ -124,7 +126,8 @@ export function useGiftedMessages(messages: NomiMessage[], userId?: string) {
                     msg.metadata?.type === 'task_progress'
                         ? msg.metadata
                         : undefined,
-            });
+                meta: (msg as any).meta,
+            } as any);
         }
 
         // Cache result

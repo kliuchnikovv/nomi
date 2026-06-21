@@ -48,8 +48,10 @@ export class ChatSocket {
     private chatId: string | null = null;
     private connectedChatId: string | null = null;
     private hasConnectedBefore = false;
-    // frameIdCounter kept for legacy numeric frame ids; command calls use UUIDs instead.
-    private frameIdCounter = 1;
+    // Seed the counter with a large random value so it survives reconnects
+    // without colliding with stale pending entries from a previous socket
+    // instance. Go's Frame.ID is int-typed, so we keep numeric ids on the wire.
+    private frameIdCounter = Math.floor(Math.random() * 1_000_000) + 1;
 
     constructor() {}
 
@@ -838,10 +840,11 @@ export class ChatSocket {
         _userId: string,
         name: string,
         args: object,
-    ): string {
-        // Use a UUID string as the frame id so it survives reconnects without
-        // colliding with the monotonic integer counter used by other frame types.
-        const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    ): number {
+        // Numeric id on the wire (Go's Frame.ID is int). The counter is seeded
+        // with a large random value so a reconnect doesn't reuse ids that are
+        // still pending in ChatContext's resolver map.
+        const id = this.frameIdCounter++;
         const frame = {
             id,
             kind: 'signal',
@@ -852,14 +855,33 @@ export class ChatSocket {
                 args,
             },
         };
+        console.log('[Socket] sendCommandCall', {
+            id,
+            name,
+            chatId,
+            isReady: this.isReady(),
+            wsExists: !!this.ws,
+            readyState: this.ws?.readyState,
+            channel: this.channel,
+            connectedChatId: this.connectedChatId,
+        });
         if (this.isReady()) {
             try {
                 this.ws.send(JSON.stringify(frame));
+                console.log('[Socket] sendCommandCall: sent over WS', id);
                 this.touchActivity();
-            } catch {
+            } catch (e) {
+                console.warn(
+                    '[Socket] sendCommandCall: send threw, pushing to outbox',
+                    e,
+                );
                 this.pushToOutbox(frame);
             }
         } else {
+            console.warn(
+                '[Socket] sendCommandCall: WS not ready, pushed to outbox',
+                id,
+            );
             this.pushToOutbox(frame);
         }
         return id;

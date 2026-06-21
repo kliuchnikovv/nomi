@@ -15,7 +15,7 @@ import { useMain } from '../main/context';
 import { CalendarWidget } from './components/CalendarWidget';
 import { WeatherWidget } from './components/WeatherWidget';
 import { DateWidget } from './components/DateWidget';
-import { RecentChatsWidget } from './components/RecentChatsWidget';
+import { RecentSessionsWidget } from './components/RecentSessionsWidget';
 import { UpdatesCard } from './components/UpdatesCard';
 import { TasksCard } from './components/TasksCard';
 import { PlaceholderWidget } from './components/PlaceholderWidget';
@@ -92,8 +92,8 @@ export const DashboardScreen = () => {
                 {/* Tasks card — entry point to background autonomous tasks */}
                 <TasksCard />
 
-                {/* Row 2: Recent Chats (full width) */}
-                <RecentChatsWidget />
+                {/* Row 2: Recent Sessions (full width) */}
+                <RecentSessionsWidget />
 
                 {/* Row 3: Placeholder full */}
                 <PlaceholderWidget size="full" />

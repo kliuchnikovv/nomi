@@ -298,9 +298,9 @@ func (s *Storage) ensureUpdatesChatTx(ctx context.Context, db *gorm.DB, userID u
 	}
 	if user.UpdatesChatID != nil && *user.UpdatesChatID != uuid.Nil {
 		// Verify the referenced chat still exists. A deleted chat leaves a
-		// dangling updates_chat_id, which makes the client (single_chat_mode)
-		// focus a chat the WS handler rejects with 403 — an endless reconnect
-		// loop. If the pointer is dangling, fall through to recreate.
+		// dangling updates_chat_id, which makes the client focus a chat the
+		// WS handler rejects with 403 — an endless reconnect loop. If the
+		// pointer is dangling, fall through to recreate.
 		var count int64
 		if err := db.WithContext(ctx).Model(&Chat{}).
 			Where("id = ? AND user_id = ? AND deleted_at IS NULL",

@@ -56,15 +56,14 @@ export function MainProvider({ children }: { children: ReactNode }) {
         }
     }, [isAuthenticated]);
 
-    // Auto-load persistent chat when single chat mode is enabled
+    // Auto-load persistent chat. Always start with an empty state on app
+    // launch; the previous session is reachable via the history button.
     useEffect(() => {
-        if (!isAuthenticated || !user?.single_chat_mode) return;
+        if (!isAuthenticated) return;
 
         chatsApi
             .getPersistentChat()
             .then(persistentChat => {
-                // Always start with an empty state on app launch.
-                // Previous session is accessible via the history button.
                 setIsNewSession(true);
                 if (persistentChat) {
                     setChats(prev => {
@@ -76,7 +75,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
                 }
             })
             .catch(err => console.error('Failed to load persistent chat', err));
-    }, [isAuthenticated, user?.single_chat_mode]);
+    }, [isAuthenticated]);
 
     function rebindPlaceholderChat(newChatId: string) {
         setChats(prev =>
@@ -108,38 +107,6 @@ export function MainProvider({ children }: { children: ReactNode }) {
             }
 
             setChats(data);
-            if (user?.single_chat_mode) return;
-
-            if (data.length === 0) {
-                setActiveChatID(prev => {
-                    if (preserveActiveChat && prev) {
-                        return prev;
-                    }
-                    return emptyChatID;
-                });
-                return;
-            }
-
-            setActiveChatID(prev => {
-                const stillExists = prev
-                    ? data.some(chat => chat.id === prev)
-                    : false;
-
-                // If preserveActiveChat flag is set, preserve the current state
-                if (preserveActiveChat && prev) {
-                    if (prev === emptyChatID || stillExists) {
-                        return prev;
-                    }
-                }
-
-                // On initial load (prev is null), or if current chat deleted, or if currently on new chat
-                // Default to New Chat (Dashboard) instead of opening the latest chat
-                if (prev === emptyChatID) {
-                    return emptyChatID;
-                }
-
-                return stillExists ? prev : emptyChatID;
-            });
         } catch (error) {
             alertError(`Can't get chats: ${error}`);
             console.error(`Can't get chats: ${error}`);
@@ -287,38 +254,6 @@ export function MainProvider({ children }: { children: ReactNode }) {
     }, [activeChatID]);
 
     function createNewChat() {
-        if (chats.some(c => c.id === emptyChatID)) {
-            setActiveChatID(emptyChatID);
-            return;
-        }
-
-        // Use current filter as the default mode/team for the new chat
-        if (
-            sidebarFilter === 'all' ||
-            sidebarFilter === 'agent' ||
-            sidebarFilter === 'planner'
-        ) {
-            setPendingChatMode({ mode: 'agent', teamId: null });
-        } else {
-            setPendingChatMode({ mode: 'team', teamId: sidebarFilter });
-        }
-
-        setActiveChatID(emptyChatID);
-    }
-
-    // State to store pending mode/team for new chat
-    const [pendingChatMode, setPendingChatMode] = useState<{
-        mode: 'agent' | 'team';
-        teamId: string | null;
-        initialMessage?: string;
-    } | null>(null);
-
-    function createNewChatWithMode(
-        mode: 'agent' | 'team',
-        teamId: string | null,
-        initialMessage?: string,
-    ) {
-        setPendingChatMode({ mode, teamId, initialMessage });
         setActiveChatID(emptyChatID);
     }
 
@@ -331,10 +266,6 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setRightSidebarVisible(false);
     }
 
-    // Export pending mode for chat context to use
-    const getPendingChatMode = () => pendingChatMode;
-    const clearPendingChatMode = () => setPendingChatMode(null);
-
     const value: MainContextType = {
         chats,
         chatsLoading,
@@ -342,15 +273,12 @@ export function MainProvider({ children }: { children: ReactNode }) {
         activeChat,
         getChats,
         createNewChat,
-        createNewChatWithMode,
         renameChat,
         setChatIcon,
         deleteChat,
         setActiveChatID,
         sidebarFilter,
         setSidebarFilter,
-        pendingChatMode,
-        clearPendingChatMode,
         activePluginView,
         setActivePluginView,
         activePluginIntegrationId,

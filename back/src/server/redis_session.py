@@ -178,7 +178,6 @@ class RedisSession:
         self.cancel_event = asyncio.Event()
 
         # Single chat mode state
-        self.single_chat_mode: bool = False  # Set from session state payload
         self.byok: dict[str, str] = {}  # BYOK LLM keys; set from payload
         self.byok_default: str = ""
         self._model_context_limit: int | None = None  # Loaded lazily
@@ -997,7 +996,6 @@ class RedisSession:
         # IF tools are passed in payload (rare), we could parse them.
 
         self.agent_type = payload.get("agent_type", "nomi")
-        self.single_chat_mode = bool(payload.get("single_chat_mode", False))
 
         # BYOK: user-supplied LLM provider keys injected by the Go API as
         # "<provider>_api_key". Collected for the opencode-driven developer agent.
@@ -1073,7 +1071,6 @@ class RedisSession:
                 bot_identity=bot_identity,
                 user_location=user_location,
                 timezone=timezone,
-                single_chat_mode=self.single_chat_mode,
                 storage_backend=storage_backend or self.storage_backend,
                 task_spawner=task_spawner,
                 sync_delegation_emitter=sync_delegation_emitter,

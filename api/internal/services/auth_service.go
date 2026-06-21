@@ -180,7 +180,6 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req *GoogleLoginRequest) 
 // UpdateUserRequest represents a user update request
 type UpdateUserRequest struct {
 	WebSearchEnabled *bool   `json:"web_search_enabled"`
-	SingleChatMode   *bool   `json:"single_chat_mode"`
 	VoiceSource      *string `json:"voice_source"`
 	ProactiveEnabled *bool   `json:"proactive_enabled"`
 	// Timezone is an IANA name (e.g. "Europe/Moscow"); nil = leave unchanged.
@@ -193,9 +192,6 @@ type UpdateUserRequest struct {
 func (s *AuthService) UpdateUser(ctx context.Context, user *storage.User, req *UpdateUserRequest) (*storage.User, error) {
 	if req.WebSearchEnabled != nil {
 		user.WebSearchEnabled = *req.WebSearchEnabled
-	}
-	if req.SingleChatMode != nil {
-		user.SingleChatMode = *req.SingleChatMode
 	}
 	if req.VoiceSource != nil {
 		if *req.VoiceSource == "on_device" || *req.VoiceSource == "server_gemini" {

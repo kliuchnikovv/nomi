@@ -54,12 +54,6 @@ export default function SettingsHomeScreen() {
     const [currentThemeName, setCurrentThemeName] = useState(
         () => themes[themeName].name,
     );
-    const [singleChatMode, setSingleChatMode] = useState(
-        user?.single_chat_mode ?? false,
-    );
-    const [agnoSessions, setAgnoSessions] = useState(
-        user?.agent_storage_mode === 'agno',
-    );
     const [serverVoice, setServerVoice] = useState(
         user?.voice_source === 'server_gemini',
     );
@@ -72,33 +66,6 @@ export default function SettingsHomeScreen() {
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [pickerHour, setPickerHour] = useState(8);
     const [pickerMinute, setPickerMinute] = useState(0);
-
-    const handleSingleChatModeToggle = useCallback(
-        async (value: boolean) => {
-            try {
-                await authApi.updateMe({ single_chat_mode: value });
-                setSingleChatMode(value);
-                if (user) updateUser({ ...user, single_chat_mode: value });
-            } catch (e) {
-                console.error('Failed to update single chat mode', e);
-            }
-        },
-        [user, updateUser],
-    );
-
-    const handleAgnoSessionsToggle = useCallback(
-        async (value: boolean) => {
-            try {
-                const mode = value ? 'agno' : 'payload';
-                await authApi.updateMe({ agent_storage_mode: mode });
-                setAgnoSessions(value);
-                if (user) updateUser({ ...user, agent_storage_mode: mode });
-            } catch (e) {
-                console.error('Failed to update agent storage mode', e);
-            }
-        },
-        [user, updateUser],
-    );
 
     const handleServerVoiceToggle = useCallback(
         async (value: boolean) => {
@@ -163,8 +130,6 @@ export default function SettingsHomeScreen() {
         useCallback(() => {
             initApiUrl();
             setCurrentThemeName(themes[themeName].name);
-            setSingleChatMode(user?.single_chat_mode ?? false);
-            setAgnoSessions(user?.agent_storage_mode === 'agno');
             setServerVoice(user?.voice_source === 'server_gemini');
             setProactiveEnabled(user?.proactive_enabled ?? false);
             setDailyBriefTime(user?.daily_brief_time ?? null);
@@ -267,20 +232,6 @@ export default function SettingsHomeScreen() {
                             );
                         }}
                         isFirst
-                    />
-                    <SettingsToggleRow
-                        label="Single Chat Mode"
-                        subtitle="Use one persistent endless chat"
-                        value={singleChatMode}
-                        onToggle={handleSingleChatModeToggle}
-                        isFirst={false}
-                    />
-                    <SettingsToggleRow
-                        label="Agno Sessions"
-                        subtitle="Store session history in Agno instead of payload"
-                        value={agnoSessions}
-                        onToggle={handleAgnoSessionsToggle}
-                        isFirst={false}
                     />
                     <SettingsToggleRow
                         label="Server Voice (Gemini)"

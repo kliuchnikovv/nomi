@@ -652,8 +652,12 @@ export function ChatDetailScreen() {
         attachmentPosition,
         onMessageAction: handleMessageAction,
         inputAnimY,
-        chips: showEmptyChips ? chips : undefined,
-        onChipPress: handleChipPress,
+        chips: showEmptyChips
+            ? chips
+            : !assistantWorking && followUps?.length
+            ? followUps.map(t => ({ label: t, text: t }))
+            : undefined,
+        onChipPress: showEmptyChips ? handleChipPress : handleFollowUpPress,
     });
 
     const isUpdatesChat = activeChat?.chat_type === 'updates';
@@ -1166,16 +1170,8 @@ export function ChatDetailScreen() {
                     floatingInputStyle,
                 ]}
             >
-                {/* Generated follow-up suggestion chips, shown once the reply is done */}
-                {!assistantWorking && !!followUps?.length && (
-                    <SuggestionChips
-                        suggestions={followUps}
-                        onPress={handleFollowUpPress}
-                        accentColor={theme.accent}
-                        surfaceColor={theme.surface}
-                        textPrimaryColor={theme.textPrimary}
-                    />
-                )}
+                {/* Follow-up suggestion chips are now rendered inside ChatInput,
+                    on the same row as the model picker (see chips wiring above). */}
                 <Animated.View style={{ paddingBottom: insets.bottom }}>
                     {renderInputToolbarBase({})}
                 </Animated.View>

@@ -4,8 +4,6 @@ export type User = {
     id: string;
     name: string;
     email: string;
-    single_chat_mode?: boolean;
-    agent_storage_mode?: 'payload' | 'agno';
     /** Voice screen speech source: on-device expo-speech, or server-side Gemini TTS. */
     voice_source?: 'on_device' | 'server_gemini';
     updates_chat_id?: string | null;

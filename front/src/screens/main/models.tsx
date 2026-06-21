@@ -9,23 +9,12 @@ export interface MainContextType {
     activeChat: Chat | null;
     getChats: (options?: GetChatsOptions) => Promise<void>;
     createNewChat: () => void;
-    createNewChatWithMode: (
-        mode: 'agent' | 'team',
-        teamId: string | null,
-        initialMessage?: string,
-    ) => void;
     renameChat: (chatId: string, newTitle: string) => Promise<void>;
     setChatIcon: (chatId: string, icon: string) => Promise<void>;
     deleteChat: (chatId: string) => Promise<void>;
     setActiveChatID: (id: string | null) => void;
     sidebarFilter: string;
     setSidebarFilter: (filter: string) => void;
-    pendingChatMode?: {
-        mode: 'agent' | 'team';
-        teamId: string | null;
-        initialMessage?: string;
-    } | null;
-    clearPendingChatMode?: () => void;
     activePluginView: string | null;
     setActivePluginView: (view: string | null) => void;
     activePluginIntegrationId: string | null;

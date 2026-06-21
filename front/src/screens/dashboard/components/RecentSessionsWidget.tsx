@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-const isEmoji = (s?: string) => !!s && /\p{Emoji}/u.test(s) && !/^[0-9#*]$/.test(s);
+const isEmoji = (s?: string) =>
+    !!s && /\p{Emoji}/u.test(s) && !/^[0-9#*]$/.test(s);
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../../context/ThemeContext';
-import { useAuth } from '../../auth/context';
 import { useMain } from '../../main/context';
 import { Chat } from '../../main/models';
 import type { RootTabParamList } from '../../../navigation/types';
@@ -21,9 +21,14 @@ function getChatIcon(icon?: string): string {
     return (icon && ICON_MAP[icon]) || 'chatbubble-outline';
 }
 
-function formatRelativeTime(timestamp: number | string | null | undefined): string {
+function formatRelativeTime(
+    timestamp: number | string | null | undefined,
+): string {
     if (!timestamp) return '';
-    const ms = typeof timestamp === 'number' ? timestamp : Date.parse(String(timestamp));
+    const ms =
+        typeof timestamp === 'number'
+            ? timestamp
+            : Date.parse(String(timestamp));
     if (Number.isNaN(ms)) return '';
     const diffMs = Date.now() - ms;
     const diffMin = Math.floor(diffMs / 60000);
@@ -34,13 +39,10 @@ function formatRelativeTime(timestamp: number | string | null | undefined): stri
     return `${Math.floor(diffH / 24)}d`;
 }
 
-export function RecentChatsWidget() {
+export function RecentSessionsWidget() {
     const navigation = useNavigation<NavigationProp<RootTabParamList>>();
     const { theme } = useTheme();
-    const { user } = useAuth();
     const { chats } = useMain();
-
-    if (user?.single_chat_mode) return null;
 
     const toMs = (v: number | string) =>
         typeof v === 'number' ? v : Date.parse(String(v)) || 0;
@@ -54,23 +56,49 @@ export function RecentChatsWidget() {
     );
 
     return (
-        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Text style={[styles.header, { color: theme.textSecondary }]}>Recent Chats</Text>
+        <View
+            style={[
+                styles.card,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
+        >
+            <Text style={[styles.header, { color: theme.textSecondary }]}>
+                Recent Sessions
+            </Text>
             {recentChats.length === 0 ? (
-                <Text style={[styles.empty, { color: theme.textSecondary }]}>No chats yet</Text>
+                <Text style={[styles.empty, { color: theme.textSecondary }]}>
+                    No sessions yet
+                </Text>
             ) : (
                 recentChats.map((chat: Chat) => (
                     <TouchableOpacity
                         key={chat.id}
                         style={styles.row}
-                        onPress={() => navigation.navigate('Chat', { screen: 'ChatDetail', params: { chatId: chat.id } })}
+                        onPress={() =>
+                            navigation.navigate('Chat', {
+                                screen: 'ChatDetail',
+                                params: { chatId: chat.id },
+                            })
+                        }
                         activeOpacity={0.7}
                     >
-                        <View style={[styles.iconBg, { backgroundColor: theme.background }]}>
-                            {isEmoji(chat.icon)
-                                ? <Text style={{ fontSize: 16 }}>{chat.icon}</Text>
-                                : <Ionicons name={getChatIcon(chat.icon) as any} size={16} color={theme.accent} />
-                            }
+                        <View
+                            style={[
+                                styles.iconBg,
+                                { backgroundColor: theme.background },
+                            ]}
+                        >
+                            {isEmoji(chat.icon) ? (
+                                <Text style={{ fontSize: 16 }}>
+                                    {chat.icon}
+                                </Text>
+                            ) : (
+                                <Ionicons
+                                    name={getChatIcon(chat.icon) as any}
+                                    size={16}
+                                    color={theme.accent}
+                                />
+                            )}
                         </View>
                         <Text
                             style={[styles.title, { color: theme.textPrimary }]}
@@ -78,7 +106,12 @@ export function RecentChatsWidget() {
                         >
                             {chat.title || 'New Chat'}
                         </Text>
-                        <Text style={[styles.time, { color: theme.textSecondary }]}>
+                        <Text
+                            style={[
+                                styles.time,
+                                { color: theme.textSecondary },
+                            ]}
+                        >
                             {formatRelativeTime(chat.updated_at)}
                         </Text>
                     </TouchableOpacity>

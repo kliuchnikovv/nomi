@@ -121,7 +121,10 @@ export interface ChatContextType {
     classifiedText: string | null;
     clearProjectSuggestion: () => void;
     // Slash-command execution
-    runCommand: (name: string, args: object) => Promise<import('../../commands/types').CommandResult>;
+    runCommand: (
+        name: string,
+        args: object,
+    ) => Promise<import('../../commands/types').CommandResult>;
 }
 
 export interface Model {

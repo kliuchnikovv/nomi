@@ -17,7 +17,6 @@ type User struct {
 	PasswordHash     string         `json:"-" gorm:"not null"`
 	Name             string         `json:"name"`
 	WebSearchEnabled bool           `json:"web_search_enabled" gorm:"default:false"`
-	SingleChatMode   bool           `json:"single_chat_mode" gorm:"default:false"`
 	// VoiceSource selects how the voice screen produces speech:
 	// 'on_device' (expo-speech, default) or 'server_gemini' (server-side Gemini TTS).
 	VoiceSource      string         `json:"voice_source" gorm:"default:'on_device'"`

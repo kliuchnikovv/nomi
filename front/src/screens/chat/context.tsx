@@ -183,7 +183,17 @@ export function ChatProvider({
     activeChatIDRef.current = activeChatID;
 
     // Pending slash-command calls: frameId → {resolve, reject}
-    const pendingCommandCallsRef = useRef<Map<string, { resolve: (r: import('../../commands/types').CommandResult) => void; reject: (e: Error) => void }>>(new Map());
+    const pendingCommandCallsRef = useRef<
+        Map<
+            number,
+            {
+                resolve: (
+                    r: import('../../commands/types').CommandResult,
+                ) => void;
+                reject: (e: Error) => void;
+            }
+        >
+    >(new Map());
     // Grace window before treating a mid-generation reconnect as a dead
     // generation. Long enough for the room's replay buffer + live frames to
     // arrive, short enough that a truly-dropped turn still gets re-sent.
@@ -323,15 +333,8 @@ export function ChatProvider({
     }, []);
 
     const { user, token, refreshToken } = useAuth();
-    const {
-        activeChat,
-        pendingChatMode,
-        clearPendingChatMode,
-        sidebarFilter,
-        renameChat,
-        setChatIcon,
-        getChats,
-    } = useMain();
+    const { activeChat, sidebarFilter, renameChat, setChatIcon, getChats } =
+        useMain();
 
     // Ensure chat socket is connected to the active chat room (RoomTypeChat).
     // Reconnect when activeChatID changes so we join the new room (avoid DONE only on user channel).
@@ -1222,29 +1225,21 @@ export function ChatProvider({
         // Reset manual selection flag when switching chats
         manualModelSelectionRef.current = false;
 
-        // Sync mode from active chat or pending state
+        // Sync mode from active chat. For a fresh empty chat, derive mode
+        // from the current sidebar filter.
         if (activeChatID === emptyChatID) {
-            // If we already initialized this new chat session and no new pending mode is provided, skip
-            if (newChatInitializedRef.current && !pendingChatMode) {
+            if (newChatInitializedRef.current) {
                 return;
             }
 
-            let modeToUse: 'agent' | 'team';
-            let teamIdToUse: string | null = null;
-
-            if (pendingChatMode) {
-                modeToUse = pendingChatMode.mode;
-                teamIdToUse = pendingChatMode.teamId;
-                clearPendingChatMode?.();
-            } else {
-                modeToUse =
-                    sidebarFilter === 'all' ||
-                    sidebarFilter === 'agent' ||
-                    sidebarFilter === 'planner'
-                        ? 'agent'
-                        : 'team';
-                teamIdToUse = modeToUse === 'team' ? sidebarFilter : null;
-            }
+            const modeToUse: 'agent' | 'team' =
+                sidebarFilter === 'all' ||
+                sidebarFilter === 'agent' ||
+                sidebarFilter === 'planner'
+                    ? 'agent'
+                    : 'team';
+            const teamIdToUse: string | null =
+                modeToUse === 'team' ? sidebarFilter : null;
 
             setChatMode(modeToUse);
             if (teamIdToUse) {
@@ -1253,25 +1248,6 @@ export function ChatProvider({
             newChatInitializedRef.current = true;
         } else if (activeChat) {
             newChatInitializedRef.current = false;
-
-            // Check for initial message from pendingChatMode if it was just set
-            if (
-                pendingChatMode?.initialMessage &&
-                activeChatID === activeChat.id
-            ) {
-                const initialMsg = pendingChatMode.initialMessage;
-                // Clear it from state to prevent double-sending
-                clearPendingChatMode?.();
-
-                // Send after a short delay to ensure socket initialization
-                setTimeout(() => {
-                    console.log(
-                        'Sending initial message for task-linked chat:',
-                        initialMsg,
-                    );
-                    sendMessage(initialMsg);
-                }, 500);
-            }
 
             // Existing chat - restore mode
             if (activeChat.mode) {
@@ -1303,10 +1279,8 @@ export function ChatProvider({
         getMessages,
         pluginThreadMeta,
         activeChat,
-        pendingChatMode,
         sidebarFilter,
         sendMessage,
-        clearPendingChatMode,
     ]);
 
     // Fetch available models on mount with retry.
@@ -1433,12 +1407,32 @@ export function ChatProvider({
         socket.setHandlers({
             onDone: (frame: any) => {
                 // Intercept slash-command results before normal chat DONE handling.
+                // GoWSClient overwrites frame.id with a per-chat monotonic id,
+                // so the request/response id correlation rides on corr_id (or
+                // meta.command_result.request_id as a fallback).
                 const commandResult = frame?.payload?.meta?.command_result;
                 if (commandResult !== undefined) {
-                    const pending = pendingCommandCallsRef.current.get(frame?.id);
+                    const corrRaw = frame?.corr_id ?? commandResult?.request_id;
+                    const corrId =
+                        typeof corrRaw === 'string' ? Number(corrRaw) : corrRaw;
+                    const pending =
+                        corrId != null
+                            ? pendingCommandCallsRef.current.get(corrId)
+                            : undefined;
                     if (pending) {
-                        pendingCommandCallsRef.current.delete(frame?.id);
+                        pendingCommandCallsRef.current.delete(corrId);
                         pending.resolve(commandResult);
+                    } else {
+                        console.warn(
+                            '[ChatCtx] command_result received but no pending entry',
+                            {
+                                frameId: frame?.id,
+                                corrId,
+                                pendingKeys: Array.from(
+                                    pendingCommandCallsRef.current.keys(),
+                                ),
+                            },
+                        );
                     }
                     return;
                 }
@@ -1892,12 +1886,96 @@ export function ChatProvider({
 
     // ── Slash-command execution ──────────────────────────────────────────
     const runCommand = useCallback(
-        (name: string, args: object): Promise<import('../../commands/types').CommandResult> => {
-            const promise = new Promise<import('../../commands/types').CommandResult>((resolve, reject) => {
-                const chatId = activeChatIDRef.current;
-                const frameId = socket.sendCommandCall(
+        async (
+            name: string,
+            args: object,
+        ): Promise<import('../../commands/types').CommandResult> => {
+            // 1) Resolve a real chat id. On the welcome screen activeChatID is
+            //    the emptyChatID sentinel; create the persistent chat now so
+            //    the brain can route the command.
+            let chatId = activeChatIDRef.current;
+            if (chatId === emptyChatID) {
+                const created = await apiClient.post<{ id: string }>(
+                    `${getApiUrl()}/chats`,
+                    {
+                        title: 'New Chat',
+                        model: selectedModelRef.current || 'glm-5',
+                        mode: 'agent',
+                        type: isNewSession ? 'persistent' : undefined,
+                    },
+                );
+                if (!created?.id) {
+                    throw new Error('failed to create chat for command');
+                }
+                chatId = created.id;
+                setActiveChatID(chatId);
+                if (isNewSession) onSessionStarted?.();
+            }
+            if (!chatId || chatId === emptyChatID) {
+                throw new Error('no active chat for command');
+            }
+
+            // 1a) Pin the user's chosen model against the activeChatID-change
+            //     effect that resets it to default when chat history is empty.
+            const pinnedModel = selectedModelRef.current;
+
+            // 1b) Optimistic bubble: push a local user message with the
+            //     command_call marker so the user sees the action immediately.
+            //     useGiftedChatRenderers reads message.meta.command_call (see
+            //     `if (currentMessage?.meta?.command_call === true)`), not
+            //     `metadata`, so push into `meta` here.
+            try {
+                const store = useChatStore.getState();
+                const existing = store.chats[chatId] ?? [];
+                store.setMessages(chatId, [
+                    ...existing,
+                    {
+                        id: generateId(),
+                        chat_id: chatId,
+                        sender: user?.id ?? '',
+                        role: 'user',
+                        text: '',
+                        created_at: Date.now(),
+                        // status:'complete' so reconcileLastMessage doesn't
+                        // treat this as an unanswered user message and resend
+                        // it via sendStreamingMessage — which would spawn a
+                        // new chat and reset the model.
+                        status: 'complete',
+                        meta: { command_call: true, name, args } as any,
+                    } as any,
+                ]);
+                console.log('[ChatCtx] optimistic command bubble pushed', {
                     chatId,
-                    chatId, // sessionId = chatId (same convention as sendStreamingMessage)
+                    name,
+                });
+            } catch (e) {
+                console.warn('[ChatCtx] optimistic command bubble failed', e);
+            }
+
+            // 2) Ensure the socket is open on the chat channel for this chatId.
+            //    The activeChatID useEffect would do this on the next render,
+            //    but our async runCommand can't wait for React's effect cycle.
+            socket.setChannel('chat');
+            socket.setChatId(chatId);
+            if (!socket.isReady()) {
+                socket.connect();
+                const deadline = Date.now() + 5000;
+                while (!socket.isReady() && Date.now() < deadline) {
+                    await new Promise(r => setTimeout(r, 100));
+                }
+                if (!socket.isReady()) {
+                    throw new Error('socket failed to connect for command');
+                }
+            }
+
+            // 3) Send the frame and register the resolver for the matching DONE.
+            const resolvedChatId = chatId;
+            const result = await new Promise<
+                import('../../commands/types').CommandResult
+            >((resolve, reject) => {
+                const frameId = socket.sendCommandCall(
+                    resolvedChatId,
+                    resolvedChatId,
                     user?.id ?? '',
                     name,
                     args,
@@ -1909,13 +1987,44 @@ export function ChatProvider({
                     }
                 }, 30_000);
                 pendingCommandCallsRef.current.set(frameId, {
-                    resolve: (r) => { clearTimeout(timer); resolve(r); },
-                    reject: (e) => { clearTimeout(timer); reject(e); },
+                    resolve: r => {
+                        clearTimeout(timer);
+                        resolve(r);
+                    },
+                    reject: e => {
+                        clearTimeout(timer);
+                        reject(e);
+                    },
                 });
             });
-            return promise;
+
+            // 4) Refresh chat history so the command-call bubble (persisted
+            //    by Go with meta.command_call=true) becomes visible.
+            try {
+                if (getMessagesRef.current) {
+                    getMessagesRef.current(resolvedChatId, {
+                        isRefresh: true,
+                    });
+                }
+            } catch (e) {
+                console.warn('[ChatCtx] post-command refresh failed', e);
+            }
+
+            // 5) Restore the user's chosen model — by now the activeChatID
+            //    useEffect has run (it observes the new chat's empty history
+            //    and resets selectedModel to default).
+            if (pinnedModel && selectedModelRef.current !== pinnedModel) {
+                setSelectedModel(pinnedModel, true);
+            }
+            return result;
         },
-        [user?.id],
+        [
+            user?.id,
+            isNewSession,
+            setActiveChatID,
+            onSessionStarted,
+            setSelectedModel,
+        ],
     );
 
     const contextValue: ChatContextType = {
@@ -1972,6 +2081,8 @@ export function ChatProvider({
     };
 
     return (
-        <ChatContext.Provider value={contextValue}>{children}</ChatContext.Provider>
+        <ChatContext.Provider value={contextValue}>
+            {children}
+        </ChatContext.Provider>
     );
 }

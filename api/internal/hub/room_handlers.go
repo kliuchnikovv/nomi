@@ -1116,8 +1116,12 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		}
 
 	} else {
-		// User channel - handle routing and broadcast
-		if frame.Operation == MessageOperation && originalChatID != uuid.Nil && originalChatID != r.ID {
+		// User channel - handle routing and broadcast.
+		// Single-chat-mode clients keep only a user-typed WS open; chat-bound
+		// frames (message, command_call) must be routed into the chat room so
+		// they're persisted and forwarded to the Python brain.
+		if (frame.Operation == MessageOperation || frame.Operation == CommandCallOperation) &&
+			originalChatID != uuid.Nil && originalChatID != r.ID {
 			r.routeMessage(msg, frame, originalChatID)
 		}
 		broadcast(frame)
