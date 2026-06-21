@@ -333,8 +333,15 @@ export function ChatProvider({
     }, []);
 
     const { user, token, refreshToken } = useAuth();
-    const { activeChat, sidebarFilter, renameChat, setChatIcon, getChats } =
-        useMain();
+    const {
+        activeChat,
+        sidebarFilter,
+        renameChat,
+        setChatIcon,
+        getChats,
+        pendingInitialMessage,
+        setPendingInitialMessage,
+    } = useMain();
 
     // Ensure chat socket is connected to the active chat room (RoomTypeChat).
     // Reconnect when activeChatID changes so we join the new room (avoid DONE only on user channel).
@@ -1088,6 +1095,14 @@ export function ChatProvider({
             // Answered, explicitly stopped, or already being resent → skip.
             if (last.status === 'complete') return;
             if (last.stopped_at) return;
+            // Command-call bubbles are not regular chat messages — never resend.
+            if ((last as any)?.meta?.command_call) return;
+            // Empty user messages (no text, no attachments) — nothing to resend.
+            if (
+                (!last.text || !last.text.trim()) &&
+                !(last.attachments && last.attachments.length)
+            )
+                return;
             if (reconcilingRef.current === last.id) return;
 
             reconcilingRef.current = last.id;
@@ -1249,6 +1264,14 @@ export function ChatProvider({
         } else if (activeChat) {
             newChatInitializedRef.current = false;
 
+            // Consume any pending initial message seeded by share extension
+            // or proactive Discuss. Defer so the socket has time to open.
+            if (pendingInitialMessage && activeChatID === activeChat.id) {
+                const msg = pendingInitialMessage;
+                setPendingInitialMessage(null);
+                setTimeout(() => sendMessage(msg), 500);
+            }
+
             // Existing chat - restore mode
             if (activeChat.mode) {
                 setChatMode(activeChat.mode);
@@ -1281,6 +1304,8 @@ export function ChatProvider({
         activeChat,
         sidebarFilter,
         sendMessage,
+        pendingInitialMessage,
+        setPendingInitialMessage,
     ]);
 
     // Fetch available models on mount with retry.

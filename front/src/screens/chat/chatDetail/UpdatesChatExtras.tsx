@@ -17,7 +17,6 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../../context/ThemeContext';
 import { useMain } from '../../main/context';
-import { useChat } from '../context';
 import { eventsApi } from '../../../apiClient';
 import type { Message, ProactiveMeta } from '../../main/models';
 import type { ChatStackParamList } from '../../../navigation/types';
@@ -53,8 +52,7 @@ interface Props {
 
 export function UpdatesChatExtras({ message, chatId }: Props) {
     const { theme } = useTheme();
-    const { createNewChat } = useMain();
-    const { sendMessage } = useChat();
+    const { createNewChat, setPendingInitialMessage } = useMain();
     const navigation = useNavigation<NavProp>();
     const [dismissed, setDismissed] = useState(false);
 
@@ -94,11 +92,11 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
                 );
             }
         }
-        // Open a new agent chat pre-seeded with the proactive message text as context.
-        // Defer the send so the socket reconnects to the new chat first.
+        // Open a new agent chat pre-seeded with the proactive message text.
+        // ChatContext consumes pendingInitialMessage on activeChatID change.
+        setPendingInitialMessage(message.text);
         createNewChat();
         navigation.replace('ChatDetail', { chatId: emptyChatID });
-        setTimeout(() => sendMessage(message.text), 500);
     }
 
     async function handleDismiss() {

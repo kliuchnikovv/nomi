@@ -774,7 +774,10 @@ class AgentFactory:
         # Setup RAG User ID: use user_id if explicit, or session_id if anonymous
         rag_user_id = user_id or session_id
 
-        logger.debug("[WS] tools: %s", [t.name for t in tools])
+        logger.debug(
+            "[WS] tools: %s",
+            [getattr(t, "name", getattr(t, "__name__", repr(t))) for t in tools],
+        )
         logger.info(
             "[WS] Building agent: session_id=%s rag_user_id=%s model=%s agent_type=%s tools_count=%d",
             session_id,

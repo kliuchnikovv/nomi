@@ -39,6 +39,12 @@ export function MainProvider({ children }: { children: ReactNode }) {
     >(null);
     const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
     const [isNewSession, setIsNewSession] = useState(false);
+    // Text to auto-send into the next chat session. Set by entrypoints that
+    // open a fresh chat with pre-seeded content (share extension, proactive
+    // "Discuss" action). ChatContext consumes and clears it.
+    const [pendingInitialMessage, setPendingInitialMessage] = useState<
+        string | null
+    >(null);
 
     const { isAuthenticated, user } = useAuth();
 
@@ -287,6 +293,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setRightSidebarVisible,
         isNewSession,
         setIsNewSession,
+        pendingInitialMessage,
+        setPendingInitialMessage,
         closePluginKeepSidebar,
         closePluginWithSidebar,
         // Populated from the users.updates_chat_id column via /auth/me.

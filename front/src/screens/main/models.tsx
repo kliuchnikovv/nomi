@@ -23,6 +23,9 @@ export interface MainContextType {
     setRightSidebarVisible: (visible: boolean) => void;
     isNewSession: boolean;
     setIsNewSession: (v: boolean) => void;
+    /** Text auto-sent into the next new chat session (share extension, proactive Discuss). */
+    pendingInitialMessage: string | null;
+    setPendingInitialMessage: (msg: string | null) => void;
     closePluginKeepSidebar: () => void;
     closePluginWithSidebar: () => void;
     /** The user's Updates chat ID sourced from user.updates_chat_id, or null if not yet set. */
