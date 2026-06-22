@@ -1,93 +1,182 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { NavArrowDown } from 'iconoir-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { CommandRegistry } from './CommandRegistry';
 
 interface CommandHistoryBubbleProps {
-  meta?: {
-    command_call?: boolean;
-    name?: string;
-    args?: Record<string, any>;
-  };
+    meta?: {
+        command_call?: boolean;
+        name?: string;
+        args?: Record<string, any>;
+    };
 }
 
-/**
- * Summarizes command arguments into a single-line preview.
- * Returns first scalar value truncated to ~80 chars, or empty if no args.
- */
-function summarizeArgs(args?: Record<string, any>): string {
-  if (!args || typeof args !== 'object') return '';
+function withAlpha(hex: string, alpha: number): string {
+    if (!hex || hex[0] !== '#') return hex;
+    const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
+        .toString(16)
+        .padStart(2, '0');
+    if (hex.length === 7) return hex + a;
+    if (hex.length === 4) {
+        const r = hex[1];
+        const g = hex[2];
+        const b = hex[3];
+        return `#${r}${r}${g}${g}${b}${b}${a}`;
+    }
+    return hex;
+}
 
-  // Find first scalar value
-  for (const [, value] of Object.entries(args)) {
+function renderArgValue(value: unknown): string {
+    if (value === null || value === undefined) return '∅';
     if (typeof value === 'string') {
-      return value.length > 80 ? value.substring(0, 77) + '...' : value;
+        return value.length > 200 ? value.slice(0, 197) + '…' : value;
     }
     if (typeof value === 'number' || typeof value === 'boolean') {
-      return String(value);
+        return String(value);
     }
-  }
-  return '';
+    try {
+        const json = JSON.stringify(value, null, 2);
+        return json.length > 400 ? json.slice(0, 397) + '…' : json;
+    } catch {
+        return String(value);
+    }
 }
 
 export const CommandHistoryBubble: React.FC<CommandHistoryBubbleProps> = ({
-  meta,
+    meta,
 }) => {
-  const { theme } = useTheme();
+    const { theme, palette } = useTheme() as any;
+    const [expanded, setExpanded] = useState(false);
+    const [, force] = useState(0);
 
-  const { title, summary } = useMemo(() => {
-    const commandName = meta?.name || 'Unknown';
-    const commandSpec = CommandRegistry.get(commandName);
-    const commandTitle = commandSpec?.title || commandName;
-    const commandSummary = summarizeArgs(meta?.args);
+    const commandName = meta?.name || 'command';
+    const spec = CommandRegistry.get(commandName);
+    const title = spec?.title || commandName;
 
-    return {
-      title: commandTitle,
-      summary: commandSummary,
-    };
-  }, [meta?.name, meta?.args]);
+    // Lazy-load the registry if the cache is cold so the title becomes
+    // human-readable as soon as the API responds.
+    useEffect(() => {
+        if (spec) return;
+        let cancelled = false;
+        CommandRegistry.load()
+            .then(() => {
+                if (!cancelled) force(x => x + 1);
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, [spec, commandName]);
 
-  const styles = StyleSheet.create({
-    container: {
-      backgroundColor: theme.surface || '#f0f0f0',
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      marginVertical: 4,
-      marginHorizontal: 8,
-      borderLeftWidth: 3,
-      borderLeftColor: theme.accent || '#007AFF',
-      maxWidth: '90%',
-    },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    emoji: {
-      fontSize: 16,
-      marginRight: 6,
-    },
-    title: {
-      color: theme.text || '#000',
-      fontSize: 14,
-      fontWeight: '600',
-      flex: 1,
-    },
-    summary: {
-      color: theme.textSecondary || '#666',
-      fontSize: 12,
-      marginTop: 4,
-      lineHeight: 16,
-    },
-  });
+    const accent = palette?.orange || '#f5a623';
+    const styles = useMemo(
+        () =>
+            StyleSheet.create({
+                container: {
+                    marginVertical: 6,
+                    backgroundColor: withAlpha(accent, 0.08),
+                    borderRadius: 8,
+                    overflow: 'hidden',
+                },
+                header: {
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                },
+                headerLeft: {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    flexShrink: 1,
+                },
+                title: {
+                    color: accent,
+                    fontSize: 12,
+                    fontWeight: '600',
+                    marginLeft: 6,
+                    flexShrink: 1,
+                },
+                content: {
+                    paddingHorizontal: 10,
+                    paddingBottom: 8,
+                    paddingTop: 2,
+                },
+                argRow: {
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    marginTop: 4,
+                },
+                argKey: {
+                    color: theme.textSecondary,
+                    fontSize: 12,
+                    fontWeight: '600',
+                    marginRight: 6,
+                },
+                argValue: {
+                    color: theme.textPrimary || theme.text,
+                    fontSize: 12,
+                    lineHeight: 16,
+                    flexShrink: 1,
+                },
+                empty: {
+                    color: theme.textSecondary,
+                    fontSize: 12,
+                    fontStyle: 'italic',
+                },
+            }),
+        [accent, theme],
+    );
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.emoji}>🛠</Text>
-        <Text style={styles.title}>{title}</Text>
-      </View>
-      {summary ? <Text style={styles.summary}>{summary}</Text> : null}
-    </View>
-  );
+    const args = meta?.args ?? {};
+    const argEntries = Object.entries(args);
+
+    return (
+        <View style={styles.container}>
+            <Pressable
+                onPress={() => setExpanded(e => !e)}
+                style={({ pressed }) => [
+                    styles.header,
+                    pressed && { opacity: 0.7 },
+                ]}
+            >
+                <View style={styles.headerLeft}>
+                    <MaterialCommunityIcons
+                        name="slash-forward"
+                        size={14}
+                        color={accent}
+                    />
+                    <Text style={styles.title} numberOfLines={1}>
+                        {title}
+                    </Text>
+                </View>
+                <NavArrowDown
+                    width={12}
+                    height={12}
+                    color={theme.textSecondary}
+                    style={{
+                        transform: [{ rotate: expanded ? '0deg' : '-90deg' }],
+                    }}
+                />
+            </Pressable>
+            {expanded && (
+                <View style={styles.content}>
+                    {argEntries.length === 0 ? (
+                        <Text style={styles.empty}>(no arguments)</Text>
+                    ) : (
+                        argEntries.map(([key, value]) => (
+                            <View key={key} style={styles.argRow}>
+                                <Text style={styles.argKey}>{key}:</Text>
+                                <Text style={styles.argValue}>
+                                    {renderArgValue(value)}
+                                </Text>
+                            </View>
+                        ))
+                    )}
+                </View>
+            )}
+        </View>
+    );
 };

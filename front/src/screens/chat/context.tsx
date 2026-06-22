@@ -182,6 +182,12 @@ export function ChatProvider({
     const activeChatIDRef = useRef<string>(activeChatID);
     activeChatIDRef.current = activeChatID;
 
+    // While runCommand is in flight for a chat id, holds that chat id. Used to
+    // suppress the activeChatID-change useEffect's `manualModelSelectionRef`
+    // reset and the empty-history model-reset in getMessages so a slash command
+    // doesn't kick the user's chosen model back to the default.
+    const commandPinRef = useRef<string | null>(null);
+
     // Pending slash-command calls: frameId → {resolve, reject}
     const pendingCommandCallsRef = useRef<
         Map<
@@ -481,7 +487,12 @@ export function ChatProvider({
                 // before a reply, not stopped), auto-resend it.
                 reconcileRef.current?.(chatID);
 
-                // Sync model from last assistant message or any message that has a model field
+                // Sync model from last assistant message or any message that has a model field.
+                // Skip while a slash command is pinning the model for this chat —
+                // otherwise the empty-history fallback resets to default mid-run.
+                if (commandPinRef.current === chatID) {
+                    return;
+                }
                 if (!manualModelSelectionRef.current && data.length > 0) {
                     // Find the last message that has a model defined
                     let lastModel = null;
@@ -1237,8 +1248,11 @@ export function ChatProvider({
         setExternalTitle(null);
         setError(null); // Clear error on chat switch
         setLastFailedMessage(null); // Release retained attachment URIs and context items
-        // Reset manual selection flag when switching chats
-        manualModelSelectionRef.current = false;
+        // Reset manual selection flag when switching chats — but not while
+        // runCommand is pinning the model for the chat we're switching into.
+        if (commandPinRef.current !== activeChatID) {
+            manualModelSelectionRef.current = false;
+        }
 
         // Sync mode from active chat. For a fresh empty chat, derive mode
         // from the current sidebar filter.
@@ -1919,6 +1933,7 @@ export function ChatProvider({
             //    the emptyChatID sentinel; create the persistent chat now so
             //    the brain can route the command.
             let chatId = activeChatIDRef.current;
+            const pinnedModel = selectedModelRef.current;
             if (chatId === emptyChatID) {
                 const created = await apiClient.post<{ id: string }>(
                     `${getApiUrl()}/chats`,
@@ -1933,115 +1948,164 @@ export function ChatProvider({
                     throw new Error('failed to create chat for command');
                 }
                 chatId = created.id;
+                // Arm the pin *before* setActiveChatID so the activeChatID
+                // useEffect doesn't clobber `manualModelSelectionRef` mid-run.
+                commandPinRef.current = chatId;
+                if (pinnedModel) {
+                    manualModelSelectionRef.current = true;
+                }
                 setActiveChatID(chatId);
                 if (isNewSession) onSessionStarted?.();
+            } else {
+                commandPinRef.current = chatId;
+                if (pinnedModel) {
+                    manualModelSelectionRef.current = true;
+                }
             }
             if (!chatId || chatId === emptyChatID) {
+                commandPinRef.current = null;
                 throw new Error('no active chat for command');
             }
 
-            // 1a) Pin the user's chosen model against the activeChatID-change
-            //     effect that resets it to default when chat history is empty.
-            const pinnedModel = selectedModelRef.current;
-
-            // 1b) Optimistic bubble: push a local user message with the
-            //     command_call marker so the user sees the action immediately.
-            //     useGiftedChatRenderers reads message.meta.command_call (see
-            //     `if (currentMessage?.meta?.command_call === true)`), not
-            //     `metadata`, so push into `meta` here.
-            try {
-                const store = useChatStore.getState();
-                const existing = store.chats[chatId] ?? [];
-                store.setMessages(chatId, [
-                    ...existing,
-                    {
-                        id: generateId(),
-                        chat_id: chatId,
-                        sender: user?.id ?? '',
-                        role: 'user',
-                        text: '',
-                        created_at: Date.now(),
-                        // status:'complete' so reconcileLastMessage doesn't
-                        // treat this as an unanswered user message and resend
-                        // it via sendStreamingMessage — which would spawn a
-                        // new chat and reset the model.
-                        status: 'complete',
-                        meta: { command_call: true, name, args } as any,
-                    } as any,
-                ]);
-                console.log('[ChatCtx] optimistic command bubble pushed', {
-                    chatId,
-                    name,
-                });
-            } catch (e) {
-                console.warn('[ChatCtx] optimistic command bubble failed', e);
-            }
-
-            // 2) Ensure the socket is open on the chat channel for this chatId.
-            //    The activeChatID useEffect would do this on the next render,
-            //    but our async runCommand can't wait for React's effect cycle.
-            socket.setChannel('chat');
-            socket.setChatId(chatId);
-            if (!socket.isReady()) {
-                socket.connect();
-                const deadline = Date.now() + 5000;
-                while (!socket.isReady() && Date.now() < deadline) {
-                    await new Promise(r => setTimeout(r, 100));
-                }
-                if (!socket.isReady()) {
-                    throw new Error('socket failed to connect for command');
-                }
-            }
-
-            // 3) Send the frame and register the resolver for the matching DONE.
-            const resolvedChatId = chatId;
-            const result = await new Promise<
-                import('../../commands/types').CommandResult
-            >((resolve, reject) => {
-                const frameId = socket.sendCommandCall(
-                    resolvedChatId,
-                    resolvedChatId,
-                    user?.id ?? '',
-                    name,
-                    args,
-                );
-                const timer = setTimeout(() => {
-                    if (pendingCommandCallsRef.current.has(frameId)) {
-                        pendingCommandCallsRef.current.delete(frameId);
-                        reject(new Error('command timeout'));
-                    }
-                }, 30_000);
-                pendingCommandCallsRef.current.set(frameId, {
-                    resolve: r => {
-                        clearTimeout(timer);
-                        resolve(r);
-                    },
-                    reject: e => {
-                        clearTimeout(timer);
-                        reject(e);
-                    },
-                });
-            });
-
-            // 4) Refresh chat history so the command-call bubble (persisted
-            //    by Go with meta.command_call=true) becomes visible.
-            try {
-                if (getMessagesRef.current) {
-                    getMessagesRef.current(resolvedChatId, {
-                        isRefresh: true,
-                    });
-                }
-            } catch (e) {
-                console.warn('[ChatCtx] post-command refresh failed', e);
-            }
-
-            // 5) Restore the user's chosen model — by now the activeChatID
-            //    useEffect has run (it observes the new chat's empty history
-            //    and resets selectedModel to default).
-            if (pinnedModel && selectedModelRef.current !== pinnedModel) {
+            // 1a) Re-pin via setSelectedModel so the ref and storage agree.
+            if (pinnedModel) {
                 setSelectedModel(pinnedModel, true);
             }
-            return result;
+
+            try {
+                // 1b) Optimistic bubble: keep a reference so we can re-push it
+                //     after `getMessages` (triggered by the activeChatID effect)
+                //     wipes the new chat's empty list onto the store.
+                const optimisticMsg = {
+                    id: generateId(),
+                    chat_id: chatId,
+                    sender: user?.id ?? '',
+                    role: 'user',
+                    text: '',
+                    created_at: Date.now(),
+                    status: 'complete',
+                    meta: { command_call: true, name, args },
+                } as any;
+                const argsKey = (() => {
+                    try {
+                        return JSON.stringify(args);
+                    } catch {
+                        return '';
+                    }
+                })();
+                const hasPersistedTwin = (list: any[]) =>
+                    list.some(m => {
+                        const meta = (m as any)?.meta;
+                        if (!meta?.command_call) return false;
+                        if (meta?.name !== name) return false;
+                        try {
+                            return JSON.stringify(meta?.args ?? {}) === argsKey;
+                        } catch {
+                            return false;
+                        }
+                    });
+                const pushOptimistic = (tag: string) => {
+                    try {
+                        const store = useChatStore.getState();
+                        const existing = store.chats[chatId] ?? [];
+                        if (existing.some(m => m.id === optimisticMsg.id))
+                            return;
+                        // Server already persisted this command_call — keep its
+                        // copy (carries real id, timestamp, server metadata).
+                        if (hasPersistedTwin(existing)) return;
+                        store.setMessages(chatId, [...existing, optimisticMsg]);
+                        console.log(
+                            '[ChatCtx] optimistic command bubble pushed',
+                            {
+                                chatId,
+                                name,
+                                tag,
+                            },
+                        );
+                    } catch (e) {
+                        console.warn(
+                            '[ChatCtx] optimistic command bubble failed',
+                            e,
+                        );
+                    }
+                };
+                pushOptimistic('initial');
+
+                // 2) Ensure the socket is open on the chat channel for this chatId.
+                //    The activeChatID useEffect would do this on the next render,
+                //    but our async runCommand can't wait for React's effect cycle.
+                socket.setChannel('chat');
+                socket.setChatId(chatId);
+                if (!socket.isReady()) {
+                    socket.connect();
+                    const deadline = Date.now() + 5000;
+                    while (!socket.isReady() && Date.now() < deadline) {
+                        await new Promise(r => setTimeout(r, 100));
+                    }
+                    if (!socket.isReady()) {
+                        throw new Error('socket failed to connect for command');
+                    }
+                }
+                // Re-push: the activeChatID effect may have called getMessages and
+                // wiped our optimistic message with an empty server list by now.
+                pushOptimistic('post-connect');
+
+                // 3) Send the frame and register the resolver for the matching DONE.
+                const resolvedChatId = chatId;
+                const result = await new Promise<
+                    import('../../commands/types').CommandResult
+                >((resolve, reject) => {
+                    const frameId = socket.sendCommandCall(
+                        resolvedChatId,
+                        resolvedChatId,
+                        user?.id ?? '',
+                        name,
+                        args,
+                    );
+                    const timer = setTimeout(() => {
+                        if (pendingCommandCallsRef.current.has(frameId)) {
+                            pendingCommandCallsRef.current.delete(frameId);
+                            reject(new Error('command timeout'));
+                        }
+                    }, 30_000);
+                    pendingCommandCallsRef.current.set(frameId, {
+                        resolve: r => {
+                            clearTimeout(timer);
+                            resolve(r);
+                        },
+                        reject: e => {
+                            clearTimeout(timer);
+                            reject(e);
+                        },
+                    });
+                });
+
+                // 4) Refresh chat history so the command-call bubble (persisted
+                //    by Go with meta.command_call=true) becomes visible. AWAIT it
+                //    — otherwise the async setMessages from inside getMessages
+                //    fires after the re-push below and wipes the optimistic bubble.
+                try {
+                    if (getMessagesRef.current) {
+                        await getMessagesRef.current(resolvedChatId, {
+                            isRefresh: true,
+                        });
+                    }
+                } catch (e) {
+                    console.warn('[ChatCtx] post-command refresh failed', e);
+                }
+                // Re-push only if server hasn't persisted the twin yet — the
+                // pushOptimistic merge guards against duplicates.
+                pushOptimistic('post-refresh');
+
+                // 5) Restore the user's chosen model — re-pin in case anything
+                //    overrode the manual pin during the await chain.
+                if (pinnedModel && selectedModelRef.current !== pinnedModel) {
+                    setSelectedModel(pinnedModel, true);
+                }
+                return result;
+            } finally {
+                commandPinRef.current = null;
+            }
         },
         [
             user?.id,

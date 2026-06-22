@@ -318,13 +318,6 @@ export function useGiftedChatRenderers({
         (props: any) => {
             const { currentMessage } = props;
 
-            // Render command-call messages with special bubble
-            if (currentMessage?.meta?.command_call === true) {
-                return (
-                    <CommandHistoryBubble meta={currentMessage.meta} />
-                );
-            }
-
             return (
                 <View style={{ width: '100%' }}>
                     <Bubble
@@ -470,6 +463,23 @@ export function useGiftedChatRenderers({
             // since the synthetic task message maps to the 'system' user).
             if (currentMessage?.task_progress) {
                 return <TaskProgressCard task={currentMessage.task_progress} />;
+            }
+
+            // Slash-command call: render as a full-width left-aligned bar
+            // (Thinking-style accordion), bypassing GiftedChat's position-aware
+            // Message container so it doesn't get pushed to the user side.
+            if (currentMessage?.meta?.command_call === true) {
+                return (
+                    <View
+                        style={{
+                            width: '100%',
+                            paddingHorizontal: windowWidth * 0.04,
+                            marginTop: 8,
+                        }}
+                    >
+                        <CommandHistoryBubble meta={currentMessage.meta} />
+                    </View>
+                );
             }
 
             const attachments = currentMessage?.attachments;

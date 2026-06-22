@@ -104,28 +104,13 @@ function App() {
     useEffect(() => {
         const init = async () => {
             try {
-                // Timeout promise
-                const timeout = new Promise((_, reject) =>
-                    setTimeout(
-                        () => reject(new Error('Initialization timed out')),
-                        5000,
-                    ),
-                );
-
-                setInitStatus('Initializing API...');
-                await Promise.race([initApiUrl(), timeout]);
-                console.log('[App] API URL initialized');
-
-                setInitStatus('Initializing Database...');
-                await Promise.race([initDatabase(), timeout]);
-                console.log('[App] Database initialized');
-                console.log(
-                    '[App] Local RAG logging enabled. You will see [Local RAG Search] and [Client Tool Executor] when the agent runs a local search (e.g. "search my emails" or "find in my notes").',
-                );
-
-                // IMPORTANT: wait for all plugins to register BEFORE defining background tasks.
-                // defineAllBackgroundTasks() reads the plugin handler map synchronously;
-                // if called before plugins load the map is empty and no tasks get defined.
+                // Register plugins + define background tasks FIRST. iOS may fire
+                // background-fetch for previously-registered TaskManager tasks
+                // (persisted in Info.plist across launches) before our async
+                // init finishes; without their JS definitions the runtime
+                // raises E_TASK_NOT_FOUND and terminates the app. Plugin
+                // registration is local (no network), so it can't stall on
+                // flaky DNS the way initApiUrl can.
                 setInitStatus('Registering plugins...');
                 await registerClientPlugins();
                 defineAllBackgroundTasks();
@@ -133,6 +118,17 @@ function App() {
                 defineHeartbeatTask();
                 console.log(
                     '[App] Background tasks defined after plugin registration',
+                );
+
+                setInitStatus('Initializing API...');
+                await initApiUrl();
+                console.log('[App] API URL initialized');
+
+                setInitStatus('Initializing Database...');
+                await initDatabase();
+                console.log('[App] Database initialized');
+                console.log(
+                    '[App] Local RAG logging enabled. You will see [Local RAG Search] and [Client Tool Executor] when the agent runs a local search (e.g. "search my emails" or "find in my notes").',
                 );
 
                 // Auto-detect location on launch (best-effort, does not block startup)

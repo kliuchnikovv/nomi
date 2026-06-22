@@ -1378,6 +1378,17 @@ class RedisSession:
         # path uses around lines 1213/1582). Without it, memory.note and
         # learn.feedback fall back to NO_KNOWLEDGE.
         knowledge = getattr(getattr(self, "agent_factory", None), "_knowledge", None)
+        # Enablers: a model handle (for ctx.complete summaries) and the tool
+        # config client (for ctx.toolkit integration resolution). Both reuse the
+        # AgentFactory the agent path already builds against; failures degrade to
+        # None so commands that don't need them still run.
+        config_client = getattr(getattr(self, "agent_factory", None), "config_client", None)
+        model = None
+        try:
+            if getattr(self, "agent_factory", None) is not None:
+                model = self.agent_factory.build_model(self.current_model_name)
+        except Exception:
+            logger.warning("[RedisSession] command_call: failed to build model", exc_info=True)
         ctx = CommandContext(
             user_id=self.user_id or "",
             session_id=getattr(self, "session_id", None),
@@ -1386,6 +1397,8 @@ class RedisSession:
             knowledge=knowledge,
             emit=self._emit_intermediate_frame,
             client_tool_runner=getattr(self, "_run_client_tool", None),
+            model=model,
+            config_client=config_client,
         )
         logger.info(
             "[RedisSession] _handle_command_call name=%s has_knowledge=%s",

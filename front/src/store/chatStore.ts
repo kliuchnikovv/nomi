@@ -191,7 +191,48 @@ export const useChatStore = create<ChatStore>()(
                     flushPendingUpdates(chatId, set);
                 }
                 touchChatAccess(chatId);
-                const trimmed = trimMessages(messages, MAX_MESSAGES_PER_CHAT);
+                // Bridge the brief window between the optimistic command_call
+                // bubble (pushed locally in runCommand) and the server-persisted
+                // row arriving via getMessages refresh. Keep a local bubble only
+                // if the incoming list has neither its id NOR a twin row
+                // (same name+args, also flagged command_call). Once the server
+                // twin shows up the optimistic one is dropped, preventing the
+                // doubled-bubble regression.
+                const current = get().chats[chatId] ?? [];
+                const incomingIds = new Set(messages.map(m => m.id));
+                const argsKey = (a: any) => {
+                    try {
+                        return JSON.stringify(a ?? {});
+                    } catch {
+                        return '';
+                    }
+                };
+                const hasIncomingTwin = (local: any) => {
+                    const lm = local?.meta;
+                    if (!lm?.command_call) return false;
+                    const lKey = argsKey(lm?.args);
+                    return messages.some((srv: any) => {
+                        const sm = srv?.meta;
+                        return (
+                            sm?.command_call === true &&
+                            sm?.name === lm?.name &&
+                            argsKey(sm?.args) === lKey
+                        );
+                    });
+                };
+                const localCommandBubbles = current.filter(
+                    m =>
+                        (m as any)?.meta?.command_call === true &&
+                        !incomingIds.has(m.id) &&
+                        !hasIncomingTwin(m),
+                );
+                let merged = messages;
+                if (localCommandBubbles.length > 0) {
+                    merged = [...messages, ...localCommandBubbles].sort(
+                        (a, b) => (a.created_at ?? 0) - (b.created_at ?? 0),
+                    );
+                }
+                const trimmed = trimMessages(merged, MAX_MESSAGES_PER_CHAT);
                 set(state => ({
                     chats: evictOldChats({
                         ...state.chats,
