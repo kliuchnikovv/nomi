@@ -233,7 +233,27 @@ async def list_commands(x_user_id: str = Header(..., alias="X-User-ID")):
         """Return list of integrations required by a command that aren't connected."""
         return [r for r in requires if r not in connected]
 
-    return {"commands": CommandRegistry.public_listing(missing_resolver)}
+    listing = CommandRegistry.public_listing(missing_resolver)
+
+    # Append power-user slash commands (different system: parsed pre-agent in
+    # redis_session, no integrations required, no args form). They share the
+    # endpoint so the existing CommandAutocomplete can surface them when the
+    # user types "/".
+    from src.server.slash_commands.registry import all_commands as _slash_all
+
+    for spec in _slash_all():
+        listing.append(
+            {
+                "name": spec.name,
+                "title": f"/{spec.name}",
+                "description": spec.summary,
+                "requires": [],
+                "missing": [],
+                "args_schema": {},
+                "surface": "chat",
+            }
+        )
+    return {"commands": listing}
 
 
 class EmailAnalyzeRequest(BaseModel):

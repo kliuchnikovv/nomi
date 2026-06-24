@@ -86,14 +86,14 @@ export const DashboardScreen = () => {
                     <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
                 </TouchableOpacity>*/}
 
+                {/* Recent Sessions (full width) */}
+                <RecentSessionsWidget />
+
                 {/* Updates card — proactive messages chat (hidden when no updates_chat_id) */}
                 <UpdatesCard />
 
                 {/* Tasks card — entry point to background autonomous tasks */}
                 <TasksCard />
-
-                {/* Row 2: Recent Sessions (full width) */}
-                <RecentSessionsWidget />
 
                 {/* Row 3: Placeholder full */}
                 <PlaceholderWidget size="full" />

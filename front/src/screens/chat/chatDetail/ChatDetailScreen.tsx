@@ -995,7 +995,9 @@ export function ChatDetailScreen() {
                 </View>
             )}
 
-            <View
+            <Animated.View
+                key={`chat-content-${chatId}`}
+                entering={FadeIn.duration(220)}
                 style={{
                     flex: 1,
                     backgroundColor: theme.background,
@@ -1011,8 +1013,7 @@ export function ChatDetailScreen() {
                             onPress={Keyboard.dismiss}
                             accessible={false}
                         >
-                            <Animated.View
-                                entering={FadeIn.duration(220)}
+                            <View
                                 style={{
                                     flex: 1,
                                     justifyContent: 'center',
@@ -1027,7 +1028,7 @@ export function ChatDetailScreen() {
                                     surfaceColor={theme.surface}
                                     showChips={false}
                                 />
-                            </Animated.View>
+                            </View>
                         </TouchableWithoutFeedback>
                     </KeyboardAvoidingView>
                 ) : (
@@ -1117,7 +1118,7 @@ export function ChatDetailScreen() {
                         }
                     />
                 )}
-            </View>
+            </Animated.View>
 
             {/* Soft fade into the bottom controls — mirrors the top header fade.
                 Anchored at the bottom and follows the keyboard via fadeContainerStyle. */}

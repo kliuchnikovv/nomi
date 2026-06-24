@@ -1639,6 +1639,8 @@ class RedisSession:
                     send_frame=self._send_frame,
                     next_id_fn=lambda: self.next_id,
                     redis_client=self.redis_client,
+                    agno_db=getattr(self.agent_factory, "_db", None),
+                    build_model=getattr(self.agent_factory, "build_model", None),
                 ),
             )
             if handled:
@@ -1657,6 +1659,25 @@ class RedisSession:
         sticky_think = sticky_flags.get("think_level")
         if isinstance(sticky_think, str) and sticky_think:
             self.current_thinking = sticky_think.lower()
+
+        # 0e. /compact prefix injection. After /compact wipes the Agno session
+        # the agent has no history; we re-inject the saved summary as a header
+        # on the user's next message so the model regains the prior context
+        # without paying for it on every subsequent turn (next /compact replaces
+        # it; /reset clears it). Skip for proactive/system-generated turns.
+        compact_summary = sticky_flags.get("compact_summary")
+        if (
+            isinstance(compact_summary, str)
+            and compact_summary.strip()
+            and isinstance(text, str)
+            and payload.get("source") != "proactive"
+        ):
+            text = (
+                "[Previous session summary]\n"
+                f"{compact_summary.strip()}\n\n"
+                "---\n\n"
+                f"{text}"
+            )
 
         # 1. Tools/commands
         if payload.get("tools") or payload.get("command") or payload.get("team"):

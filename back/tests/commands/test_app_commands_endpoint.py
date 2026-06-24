@@ -168,6 +168,29 @@ def test_get_commands_with_connected_integrations():
     assert isinstance(note["missing"], list)
 
 
+def test_get_commands_includes_slash_commands():
+    """Slash commands (e.g. /help, /think) are merged into the same listing."""
+    client = TestClient(app_module.app)
+
+    class _FakeCfg:
+        entries = {}
+
+    async def _fake_fetch(user_id=None, session_id=None):
+        return _FakeCfg()
+
+    with patch.object(app_module._tool_config_client, "fetch_tools", new_callable=AsyncMock, side_effect=_fake_fetch):
+        resp = client.get("/commands", headers={"X-User-ID": "user-3"})
+
+    assert resp.status_code == 200
+    names = {c["name"] for c in resp.json()["commands"]}
+    for expected in {"help", "status", "think", "usage", "reset", "compact", "forget"}:
+        assert expected in names, f"missing slash command: /{expected}"
+    help_spec = next(c for c in resp.json()["commands"] if c["name"] == "help")
+    assert help_spec["surface"] == "chat"
+    assert help_spec["requires"] == []
+    assert help_spec["missing"] == []
+
+
 def test_get_commands_missing_user_id():
     """Test GET /commands returns 422 when X-User-Id header is missing."""
     client = TestClient(app_module.app)

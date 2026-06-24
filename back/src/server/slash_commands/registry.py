@@ -59,6 +59,12 @@ class SlashCommandContext:
     send_frame: Callable[[Frame], Awaitable[Any]]
     next_id_fn: Callable[[], int]
     redis_client: Any = None
+    # Agno PostgresDb (for session deletion / message lookup). May be None in
+    # tests or when the agent factory hasn't initialised it yet.
+    agno_db: Any = None
+    # Optional model builder ``(model_name: str) -> Model`` for handlers that
+    # need an ad-hoc LLM call (e.g. /compact). May be None.
+    build_model: Callable[[str], Any] | None = None
     # Optional injection for tests; defaults to the production helper.
     db_flags_module: Any = field(default=None)
 
@@ -129,6 +135,9 @@ async def dispatch(text: str, ctx: SlashCommandContext) -> bool:
 def _register_builtin_handlers() -> None:
     from src.server.slash_commands.handlers import help as help_handler
     from src.server.slash_commands.handlers import status as status_handler
+    from src.server.slash_commands.handlers import compact as compact_handler
+    from src.server.slash_commands.handlers import forget as forget_handler
+    from src.server.slash_commands.handlers import reset as reset_handler
     from src.server.slash_commands.handlers import think as think_handler
     from src.server.slash_commands.handlers import usage as usage_handler
 
@@ -136,6 +145,9 @@ def _register_builtin_handlers() -> None:
     status_handler.register()
     think_handler.register()
     usage_handler.register()
+    reset_handler.register()
+    compact_handler.register()
+    forget_handler.register()
 
 
 _register_builtin_handlers()
