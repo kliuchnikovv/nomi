@@ -189,6 +189,11 @@ def test_get_commands_includes_slash_commands():
     assert help_spec["surface"] == "chat"
     assert help_spec["requires"] == []
     assert help_spec["missing"] == []
+    assert help_spec["kind"] == "slash"
+    # Existing agent commands stay kind=agent so the client routes them via
+    # op=command_call.
+    agent_spec = next(c for c in resp.json()["commands"] if c["name"] == "memory.note")
+    assert agent_spec["kind"] == "agent"
 
 
 def test_get_commands_missing_user_id():

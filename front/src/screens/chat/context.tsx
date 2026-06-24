@@ -515,13 +515,21 @@ export function ChatProvider({
                     if (lastModel) {
                         console.log('Syncing model from history:', lastModel);
                         setSelectedModel(lastModel, false);
-                    } else {
+                    } else if (!selectedModelRef.current) {
+                        // No history *and* nothing selected yet — fall back to
+                        // the first available model. Otherwise keep whatever
+                        // the user currently has picked.
                         console.log(
-                            'No model found in history, resetting to default',
+                            'No model in history and none selected — picking first available',
                         );
                         setSelectedModel(
                             availableModels[0]?.id || 'glm-5',
                             false,
+                        );
+                    } else {
+                        console.log(
+                            'No model in history — keeping current selection:',
+                            selectedModelRef.current,
                         );
                     }
                 }

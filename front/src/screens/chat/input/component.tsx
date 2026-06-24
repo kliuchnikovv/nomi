@@ -153,7 +153,12 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
         if (slash) {
             const specs = await CommandRegistry.load();
             const spec = specs.find(s => s.name === slash.name);
-            if (spec) {
+            // Only intercept *agent* commands here. Slash commands (kind:'slash')
+            // must travel as plain text so the Python side's redis_session
+            // dispatcher picks them up before the agent runs — routing them
+            // through op=command_call would land in the wrong handler ("Unknown
+            // command: help").
+            if (spec && spec.kind !== 'slash') {
                 setIsSubmitting(true);
                 try {
                     await runCommand(

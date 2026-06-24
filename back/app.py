@@ -234,11 +234,14 @@ async def list_commands(x_user_id: str = Header(..., alias="X-User-ID")):
         return [r for r in requires if r not in connected]
 
     listing = CommandRegistry.public_listing(missing_resolver)
+    for entry in listing:
+        # Tag existing entries so the client can route picks correctly.
+        # Agent commands dispatch through op=command_call (with args form).
+        entry.setdefault("kind", "agent")
 
-    # Append power-user slash commands (different system: parsed pre-agent in
-    # redis_session, no integrations required, no args form). They share the
-    # endpoint so the existing CommandAutocomplete can surface them when the
-    # user types "/".
+    # Append power-user slash commands. Marked kind=slash so the client sends
+    # them as a plain text message — the bridge to redis_session.handle_user_message
+    # which parses the leading "/" and dispatches to slash_commands.dispatch.
     from src.server.slash_commands.registry import all_commands as _slash_all
 
     for spec in _slash_all():
@@ -251,6 +254,7 @@ async def list_commands(x_user_id: str = Header(..., alias="X-User-ID")):
                 "missing": [],
                 "args_schema": {},
                 "surface": "chat",
+                "kind": "slash",
             }
         )
     return {"commands": listing}
