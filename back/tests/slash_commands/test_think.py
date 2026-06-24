@@ -69,7 +69,9 @@ async def test_think_sets_level(arg, expected):
     # session_state META + text MESSAGE + DONE
     ops = [(f.kind, f.op) for f in sent]
     assert (Kind.META, Op.SESSION_STATE) in ops
-    assert ops[-1] == (Kind.META, Op.DONE)
+    # Final frame is the DATA-kind DONE that carries the assistant reply
+    # (Go hub persists the chat message from this frame's payload).
+    assert ops[-1] == (Kind.DATA, Op.DONE)
 
 
 @pytest.mark.asyncio

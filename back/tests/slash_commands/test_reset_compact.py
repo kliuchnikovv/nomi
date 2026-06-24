@@ -136,6 +136,7 @@ async def test_reset_step2_executes_and_clears_flags(monkeypatch):
     # session_state with empty flags + confirmation text + DONE
     ops = [(f.kind, f.op) for f in sent]
     assert (Kind.META, Op.SESSION_STATE) in ops
+    assert (Kind.DATA, Op.DONE) in ops
     text = next(f.payload["message"] for f in sent if f.op == Op.MESSAGE)
     assert "Reset complete" in text
     assert "7 messages archived" in text

@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
-from src.server.models import Frame, Op
-from src.server.utils import make_data, make_done, make_meta
+from src.server.models import Frame, Kind, Op
+from src.server.utils import make_meta
 
 logger = logging.getLogger(__name__)
 
@@ -67,14 +69,31 @@ class SlashCommandContext:
     build_model: Callable[[str], Any] | None = None
     # Optional injection for tests; defaults to the production helper.
     db_flags_module: Any = field(default=None)
+    # Filled by dispatch(); accumulates text emitted via send_text so the final
+    # DONE frame can carry the full body (the Go hub persists chat replies from
+    # the DONE frame's payload, not from streaming MESSAGE chunks).
+    _buffer: list[str] = field(default_factory=list)
+    _message_id: str = ""
 
     async def send_text(self, message: str) -> None:
+        if not self._message_id:
+            self._message_id = str(uuid.uuid4())
+        self._buffer.append(message)
+        # Streaming MESSAGE so the frontend can render immediately. Shape mirrors
+        # the proven _handle_command_call path: kind=DATA + message_id + role.
         await self.send_frame(
-            make_data(
-                self.next_id_fn(),
-                Op.MESSAGE,
-                self.chat_id,
-                {"type": "text", "message": message},
+            Frame(
+                id=self.next_id_fn(),
+                ts=datetime.now(timezone.utc),
+                kind=Kind.DATA,
+                op=Op.MESSAGE,
+                chat_id=self.chat_id,
+                payload={
+                    "type": "text",
+                    "message_id": self._message_id,
+                    "message": message,
+                    "role": "assistant",
+                },
             )
         )
 
@@ -93,7 +112,30 @@ class SlashCommandContext:
         )
 
     async def send_done(self) -> None:
-        await self.send_frame(make_done(self.next_id_fn(), self.chat_id))
+        """Emit a DATA-kind DONE carrying the full reply.
+
+        The Go hub uses the DONE frame's payload as the canonical assistant
+        message (it persists it to ``messages`` and the client renders it as
+        the bubble). MESSAGE frames sent earlier are streaming previews.
+        """
+        message_id = self._message_id or str(uuid.uuid4())
+        full_text = "\n".join(t for t in self._buffer if t)
+        await self.send_frame(
+            Frame(
+                id=self.next_id_fn(),
+                ts=datetime.now(timezone.utc),
+                kind=Kind.DATA,
+                op=Op.DONE,
+                chat_id=self.chat_id,
+                payload={
+                    "type": "text",
+                    "message_id": message_id,
+                    "message": full_text,
+                    "role": "assistant",
+                    "meta": {"slash_command": True},
+                },
+            )
+        )
 
 
 def parse(text: str) -> tuple[str, str] | None:
