@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CommandAutocomplete } from '../../../commands/CommandAutocomplete';
 import { CUSTOM_COMMAND_SCREENS } from '../../../commands/index';
 import { CommandRegistry } from '../../../commands/CommandRegistry';
-import { splitSlashCommand, parseTextArgs } from '../../../commands/parseTextArgs';
+import {
+    splitSlashCommand,
+    parseTextArgs,
+} from '../../../commands/parseTextArgs';
 import {
     ArrowUp,
     Plus,
@@ -153,7 +156,10 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
             if (spec) {
                 setIsSubmitting(true);
                 try {
-                    await runCommand(spec.name, parseTextArgs(spec, slash.rest));
+                    await runCommand(
+                        spec.name,
+                        parseTextArgs(spec, slash.rest),
+                    );
                 } catch (e) {
                     console.warn('command failed', e);
                 } finally {
@@ -852,10 +858,13 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
             {value.startsWith('/') && !value.includes(' ') && (
                 <CommandAutocomplete
                     query={value.slice(1)}
-                    onPick={(spec) => {
+                    onPick={spec => {
                         if (spec.name in CUSTOM_COMMAND_SCREENS) {
                             // Dedicated full screen (opt-in), not the text path.
-                            navigation.navigate('CommandScreen' as any, { spec } as any);
+                            navigation.navigate(
+                                'CommandScreen' as any,
+                                { spec } as any,
+                            );
                             setValue('');
                         } else {
                             setValue(`/${spec.name} `);

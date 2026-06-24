@@ -1,17 +1,17 @@
-import type { CommandSpec } from "./types";
+import type { CommandSpec } from './types';
 
 /**
  * Split "/name rest of the text" into its command name and the remaining text.
  * Returns null when the input is not a slash-command.
  */
 export function splitSlashCommand(
-  text: string,
+    text: string,
 ): { name: string; rest: string } | null {
-  if (!text.startsWith("/")) return null;
-  const body = text.slice(1);
-  const sp = body.search(/\s/);
-  if (sp === -1) return { name: body, rest: "" };
-  return { name: body.slice(0, sp), rest: body.slice(sp + 1) };
+    if (!text.startsWith('/')) return null;
+    const body = text.slice(1);
+    const sp = body.search(/\s/);
+    if (sp === -1) return { name: body, rest: '' };
+    return { name: body.slice(0, sp), rest: body.slice(sp + 1) };
 }
 
 /**
@@ -24,24 +24,24 @@ export function splitSlashCommand(
  * validation).
  */
 export function parseTextArgs(spec: CommandSpec, rest: string): object {
-  const schema = (spec.args_schema ?? {}) as {
-    properties?: Record<string, { type?: string }>;
-  };
-  const props = schema.properties ?? {};
-  const keys = Object.keys(props);
-  const trimmed = rest.trim();
-  if (keys.length === 0 || !trimmed) return {};
+    const schema = (spec.args_schema ?? {}) as {
+        properties?: Record<string, { type?: string }>;
+    };
+    const props = schema.properties ?? {};
+    const keys = Object.keys(props);
+    const trimmed = rest.trim();
+    if (keys.length === 0 || !trimmed) return {};
 
-  const key = keys[0];
-  const type = props[key]?.type;
+    const key = keys[0];
+    const type = props[key]?.type;
 
-  if (type === "integer") {
-    const n = parseInt(trimmed, 10);
-    return Number.isNaN(n) ? {} : { [key]: n };
-  }
-  if (type === "number") {
-    const n = parseFloat(trimmed);
-    return Number.isNaN(n) ? {} : { [key]: n };
-  }
-  return { [key]: trimmed };
+    if (type === 'integer') {
+        const n = parseInt(trimmed, 10);
+        return Number.isNaN(n) ? {} : { [key]: n };
+    }
+    if (type === 'number') {
+        const n = parseFloat(trimmed);
+        return Number.isNaN(n) ? {} : { [key]: n };
+    }
+    return { [key]: trimmed };
 }

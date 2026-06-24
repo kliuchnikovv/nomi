@@ -98,19 +98,34 @@ def _make_frame(name: str, args: dict) -> Frame:
 
 
 def _make_session(knowledge=None) -> RedisSession:
-    """Build a minimal RedisSession without calling __init__."""
+    """Build a minimal RedisSession without calling __init__.
+
+    Knowledge is wired via a stub ``agent_factory`` because
+    ``_handle_command_call`` resolves it from ``agent_factory._knowledge``,
+    not from a session attribute.
+    """
     session = RedisSession.__new__(RedisSession)
     session.user_id = "user-1"
     session.session_id = "sess-1"
     session.chat_id = "chat-1"
     session.tools_config_client = None
-    session.knowledge = knowledge
     session.next_id = 0
     session._go_ws = None
     session.redis_client = None
     # Attributes initialised in __init__ that handle_frame's finally block touches
     session._result_listener_task = None
     session.pubsub = None
+    # _handle_command_call reads knowledge / config_client / build_model off
+    # agent_factory — provide a stub that yields the test's knowledge handle
+    # and degrades model construction to None (commands that don't need a model
+    # still run).
+    factory = MagicMock()
+    factory._knowledge = knowledge
+    factory.config_client = None
+    factory.build_model = MagicMock(return_value=None)
+    session.agent_factory = factory
+    # Gate _send_client_action_and_wait off: commands run without a worker.
+    session.redis_worker = None
     # Replace _send_frame so no real Redis/WS calls occur
     session._send_frame = AsyncMock()
     return session
@@ -143,7 +158,11 @@ def _reset_registry():
 
 @pytest.mark.asyncio
 async def test_command_call_success():
-    """Valid command + valid args → _send_frame called with op=done, ok=True."""
+    """Valid command + valid args → emits a text MESSAGE then a done frame
+    whose meta.command_result is ok=True. Both frames share the same
+    message_id so Go's MessageBuilder accumulates and persists the result
+    text as a regular assistant message.
+    """
     # memory.note calls knowledge.insert() synchronously
     knowledge = MagicMock()
     knowledge.insert = MagicMock(return_value=None)
@@ -153,27 +172,44 @@ async def test_command_call_success():
 
     await session._handle_command_call(frame)
 
-    session._send_frame.assert_called_once()
-    sent: Frame = session._send_frame.call_args[0][0]
-    assert sent.op == Op.DONE
-    assert sent.payload is not None
-    cr = sent.payload["meta"]["command_result"]
+    frames = [c.args[0] for c in session._send_frame.call_args_list]
+    assert len(frames) == 2, frames
+    text_frame, done = frames
+
+    assert text_frame.op == Op.MESSAGE
+    assert text_frame.payload["type"] == "text"
+    assert text_frame.payload["role"] == "assistant"
+    assert text_frame.payload["message"] == "Note saved."
+    assert text_frame.payload["message_id"]
+
+    assert done.op == Op.DONE
+    assert done.payload is not None
+    assert done.payload["message_id"] == text_frame.payload["message_id"]
+    cr = done.payload["meta"]["command_result"]
     assert cr["ok"] is True
     assert cr["error"] is None
 
 
 @pytest.mark.asyncio
 async def test_command_call_invalid_args():
-    """Empty text violates min_length=1 → op=done, ok=False, code=invalid_args."""
+    """Empty text violates min_length=1 → op=done, ok=False, code=invalid_args.
+
+    The error.message also rides on a text MESSAGE frame so the user sees
+    *something* in chat instead of a silent command bubble.
+    """
     session = _make_session()
     frame = _make_frame("memory.note", {"text": ""})
 
     await session._handle_command_call(frame)
 
-    session._send_frame.assert_called_once()
-    sent: Frame = session._send_frame.call_args[0][0]
-    assert sent.op == Op.DONE
-    cr = sent.payload["meta"]["command_result"]
+    frames = [c.args[0] for c in session._send_frame.call_args_list]
+    assert len(frames) == 2, frames
+    text_frame, done = frames
+    assert text_frame.op == Op.MESSAGE
+    assert text_frame.payload["type"] == "text"
+    assert text_frame.payload["message"]
+    assert done.op == Op.DONE
+    cr = done.payload["meta"]["command_result"]
     assert cr["ok"] is False
     assert cr["error"]["code"] == "invalid_args"
 
@@ -186,8 +222,7 @@ async def test_command_call_unknown_command():
 
     await session._handle_command_call(frame)
 
-    session._send_frame.assert_called_once()
-    sent: Frame = session._send_frame.call_args[0][0]
+    sent: Frame = session._send_frame.call_args_list[-1].args[0]
     assert sent.op == Op.DONE
     cr = sent.payload["meta"]["command_result"]
     assert cr["ok"] is False
@@ -198,8 +233,10 @@ async def test_command_call_unknown_command():
 async def test_handle_frame_routes_command_call():
     """handle_frame(op=COMMAND_CALL) routes to _handle_command_call.
 
-    We confirm routing by checking that _send_frame is called with a DONE frame
-    that carries payload.meta.command_result — the signature of _emit_command_result.
+    We confirm routing by checking that the LAST emitted frame is the DONE
+    frame carrying payload.meta.command_result — the signature of
+    _emit_command_result. A text MESSAGE frame precedes it because the
+    command's result.text is non-empty.
     """
     knowledge = MagicMock()
     knowledge.insert = MagicMock(return_value=None)
@@ -217,8 +254,7 @@ async def test_handle_frame_routes_command_call():
 
     await session.handle_frame(frame)
 
-    session._send_frame.assert_called_once()
-    sent: Frame = session._send_frame.call_args[0][0]
+    sent: Frame = session._send_frame.call_args_list[-1].args[0]
     assert sent.op == Op.DONE
     assert "command_result" in sent.payload.get("meta", {})
 
@@ -249,8 +285,7 @@ async def test_command_call_handler_exception():
 
         await session._handle_command_call(frame)
 
-        session._send_frame.assert_called_once()
-        sent: Frame = session._send_frame.call_args[0][0]
+        sent: Frame = session._send_frame.call_args_list[-1].args[0]
         assert sent.op == Op.DONE
         cr = sent.payload["meta"]["command_result"]
         assert cr["ok"] is False

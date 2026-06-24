@@ -1434,17 +1434,52 @@ class RedisSession:
         await self._send_frame(out)
 
     async def _emit_command_result(self, source: Frame, result: CommandResult) -> None:
-        """Emit a final op=done frame carrying the command_result in meta.
+        """Emit the command's text as an assistant message, then a final op=done.
 
         Frame.id is overwritten downstream by GoWSClient.send_frame (it assigns
         a globally-monotonic per-chat id for Go-side dedup), so it can't be
         used for request/response correlation. Pass the source frame's id back
         via ``corr_id`` instead; the frontend's pendingCommandCallsRef matches
         on that.
+
+        Result text is also emitted as a regular op=message text frame (and the
+        same ``message_id`` rides on the done frame) so the text accumulates in
+        Go's MessageBuilder and is persisted via the standard DispatchPayload
+        path. Without this, the text only lived inside ``meta.command_result``
+        and never rendered as an assistant bubble.
         """
+        result_message_id = str(uuid.uuid4())
+
+        # Pick the user-facing string. `text` wins (handlers set it for success
+        # and for errors they want to phrase themselves); for default-shaped
+        # errors that only set `error.message`, fall back to that so the user
+        # still sees *something* in chat instead of a silent command bubble.
+        display_text = result.text or (
+            (result.error or {}).get("message") if result.error else ""
+        ) or ""
+
+        if display_text:
+            text_payload: dict[str, Any] = {
+                "type": "text",
+                "message_id": result_message_id,
+                "message": display_text,
+                "role": "assistant",
+            }
+            await self._send_frame(
+                Frame(
+                    id=self.next_id,
+                    ts=datetime.now(timezone.utc),
+                    kind=Kind.DATA,
+                    op=Op.MESSAGE,
+                    payload=text_payload,
+                    chat_id=source.chat_id,
+                )
+            )
+
         body: dict[str, Any] = {
             "type": "text",
-            "message": result.text,
+            "message_id": result_message_id,
+            "message": display_text,
             "meta": {
                 "command_result": {
                     "ok": result.ok,
