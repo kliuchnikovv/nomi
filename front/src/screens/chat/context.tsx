@@ -40,6 +40,15 @@ function generateId(): string {
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
+const TRIVIAL_MESSAGE_RE =
+    /^(привет|здравствуй(те)?|хай|hi|hello|hey|yo|спасибо|thanks|thank you|ok|okay|ладно|да|нет|yes|no|sure|пока|bye)[!.?\s]*$/i;
+
+function isTrivialMessage(text: string): boolean {
+    const trimmed = text.trim();
+    if (trimmed.length < 12) return true;
+    return TRIVIAL_MESSAGE_RE.test(trimmed);
+}
+
 // Stable empty array reference to prevent infinite re-renders in Zustand selectors
 const EMPTY_MESSAGES: Message[] = [];
 
@@ -734,34 +743,36 @@ export function ChatProvider({
                                     e,
                                 );
                             });
-                        // Classify new chat against projects
-                        projectsApi
-                            .list()
-                            .then(projects => {
-                                console.log(
-                                    '[ProjectSuggest] projects loaded:',
-                                    projects?.length ?? 0,
-                                );
-                                if (!projects || projects.length === 0)
-                                    return null;
-                                return classifyMessageForProject(
-                                    text,
-                                    projects,
-                                );
-                            })
-                            .then(projectId => {
-                                console.log(
-                                    '[ProjectSuggest] classified:',
-                                    projectId,
-                                );
-                                if (projectId) {
-                                    setSuggestedProjectId(projectId);
-                                    setClassifiedText(text);
-                                }
-                            })
-                            .catch(e => {
-                                console.warn('[ProjectSuggest] failed:', e);
-                            });
+                        // Classify new chat against projects (skip greetings/trivial text)
+                        if (!isTrivialMessage(text)) {
+                            projectsApi
+                                .list()
+                                .then(projects => {
+                                    console.log(
+                                        '[ProjectSuggest] projects loaded:',
+                                        projects?.length ?? 0,
+                                    );
+                                    if (!projects || projects.length === 0)
+                                        return null;
+                                    return classifyMessageForProject(
+                                        text,
+                                        projects,
+                                    );
+                                })
+                                .then(projectId => {
+                                    console.log(
+                                        '[ProjectSuggest] classified:',
+                                        projectId,
+                                    );
+                                    if (projectId) {
+                                        setSuggestedProjectId(projectId);
+                                        setClassifiedText(text);
+                                    }
+                                })
+                                .catch(e => {
+                                    console.warn('[ProjectSuggest] failed:', e);
+                                });
+                        }
                     }
                 }
 
@@ -771,7 +782,8 @@ export function ChatProvider({
                     chatIdToUse !== emptyChatID &&
                     !activeChat?.project_id &&
                     !suggestedProjectId &&
-                    classifiedChatIdRef.current !== chatIdToUse
+                    classifiedChatIdRef.current !== chatIdToUse &&
+                    !isTrivialMessage(text)
                 ) {
                     classifiedChatIdRef.current = chatIdToUse;
                     projectsApi
@@ -1557,6 +1569,18 @@ export function ChatProvider({
             onMeta: (frame: Frame) => {
                 if (frame.payload?.type === 'chat_update') {
                     getChats({ preserveActiveChat: true });
+                }
+                // session_state frame from a slash command (e.g. /think high) —
+                // sync the local sticky reasoning state so the badge reflects it
+                // immediately without waiting for the next outbound message.
+                if (
+                    frame.op === 'session_state' &&
+                    frame.payload?.type === 'session_state'
+                ) {
+                    const nextLevel = frame.payload?.flags?.think_level;
+                    if (typeof nextLevel === 'string') {
+                        setThinkingLevel(nextLevel);
+                    }
                 }
             },
             onMessage: (frame: Frame) => {

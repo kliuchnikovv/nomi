@@ -59,7 +59,14 @@ export interface Frame {
     id: number;
     chat_id?: string;
     kind: 'data' | 'meta' | 'signal' | 'error';
-    op: 'message' | 'ping' | 'done' | 'tools' | 'history' | 'stop';
+    op:
+        | 'message'
+        | 'ping'
+        | 'done'
+        | 'tools'
+        | 'history'
+        | 'stop'
+        | 'session_state';
     payload: any;
 }
 
@@ -85,4 +92,8 @@ export type MemberResponsePart = {
     content: string;
 };
 
-export type ContentPart = TextPart | ToolCallPart | ReasoningPart | MemberResponsePart;
+export type ContentPart =
+    | TextPart
+    | ToolCallPart
+    | ReasoningPart
+    | MemberResponsePart;

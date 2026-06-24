@@ -1620,6 +1620,44 @@ class RedisSession:
                 k: v for k, v in payload.items() if k not in standard_keys
             }
 
+        # 0c. Slash commands (/help, /status, ...). Intercept BEFORE the agent
+        # so we don't spend LLM tokens and behavior stays deterministic. The
+        # dispatcher emits its own MESSAGE + DONE frames; on True we return.
+        if isinstance(text, str) and text.lstrip().startswith("/"):
+            from src.server.slash_commands import dispatch as _slash_dispatch
+            from src.server.slash_commands import SlashCommandContext as _SlashCtx
+
+            agent_storage_mode = str(payload.get("agent_storage_mode") or "agno")
+            handled = await _slash_dispatch(
+                text,
+                _SlashCtx(
+                    user_id=self.user_id,
+                    chat_id=self.chat_id,
+                    session_id=self.session_id,
+                    payload=payload,
+                    agent_storage_mode=agent_storage_mode,
+                    send_frame=self._send_frame,
+                    next_id_fn=lambda: self.next_id,
+                    redis_client=self.redis_client,
+                ),
+            )
+            if handled:
+                return
+
+        # 0d. Sticky session flags (set by slash commands). Override payload-
+        # derived runtime state so e.g. /think high persists across turns even
+        # if the client keeps sending its default `thinking` value.
+        try:
+            from src.storage import chat_flags as _chat_flags
+
+            sticky_flags = await _chat_flags.get_flags(self.chat_id)
+        except Exception as e:  # pragma: no cover — never block a real request
+            logger.warning("[RedisSession] Failed to read session_flags: %s", e)
+            sticky_flags = {}
+        sticky_think = sticky_flags.get("think_level")
+        if isinstance(sticky_think, str) and sticky_think:
+            self.current_thinking = sticky_think.lower()
+
         # 1. Tools/commands
         if payload.get("tools") or payload.get("command") or payload.get("team"):
             self._parse_tools(payload)
@@ -2942,6 +2980,15 @@ class RedisSession:
         if "RunCompleted" not in event_type:
             return
 
+        # Capture token usage from Agno's Metrics for /usage. Never blocks the
+        # stream — best-effort write to Redis with a short TTL.
+        metrics = getattr(ev, "metrics", None)
+        if metrics is not None:
+            try:
+                await self._capture_usage_metrics(metrics)
+            except Exception as exc:  # pragma: no cover — diagnostic only
+                logger.warning("[RedisSession] usage capture failed: %s", exc)
+
         val = getattr(ev, "content", None)
         if val:
             self._last_run_completed_content = str(val)
@@ -2963,6 +3010,43 @@ class RedisSession:
                         "content": remainder,
                         "agent_name": current_agent_name,
                     }
+
+    async def _capture_usage_metrics(self, metrics: Any) -> None:
+        """Persist last-run token usage to Redis for /usage. Best effort, 1h TTL.
+
+        Aggregates across all RunCompleted events of this turn — multi-agent
+        teams and tool-followups fire several RunCompleted events, and we want
+        the user-visible "last run" to reflect the whole turn.
+        """
+        if not self.redis_client or not self.user_id:
+            return
+
+        def _num(name: str) -> int:
+            v = getattr(metrics, name, 0) or 0
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return 0
+
+        snapshot = {
+            "model": self.current_model_name or "",
+            "input_tokens": _num("input_tokens"),
+            "output_tokens": _num("output_tokens"),
+            "total_tokens": _num("total_tokens"),
+            "reasoning_tokens": _num("reasoning_tokens"),
+            "cache_read_tokens": _num("cache_read_tokens"),
+            "cache_write_tokens": _num("cache_write_tokens"),
+            "captured_at": int(time.time()),
+        }
+        cost = getattr(metrics, "cost", None)
+        if cost is not None:
+            try:
+                snapshot["cost"] = float(cost)
+            except (TypeError, ValueError):
+                pass
+
+        key = f"usage:last:{self.user_id}"
+        await self.redis_client.set(key, json.dumps(snapshot), ex=3600)
 
     async def _handle_workflow_event(
         self, ev: Any, event_type: str, streamed_text_len: int

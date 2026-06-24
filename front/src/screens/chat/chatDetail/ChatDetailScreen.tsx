@@ -23,6 +23,7 @@ import Animated, {
     useAnimatedStyle,
     useAnimatedReaction,
     runOnJS,
+    FadeIn,
 } from 'react-native-reanimated';
 import {
     KeyboardAvoidingView,
@@ -146,6 +147,7 @@ export function ChatDetailScreen() {
     const {
         activeChat,
         activeChatID,
+        setActiveChatID,
         chats,
         getChats,
         isNewSession,
@@ -470,8 +472,9 @@ export function ChatDetailScreen() {
 
     const handleNewChat = useCallback(() => {
         setIsNewSession(true);
-        (navigation as any).replace('ChatDetail', { chatId: emptyChatID });
-    }, [navigation, setIsNewSession]);
+        setActiveChatID(emptyChatID);
+        (navigation as any).setParams({ chatId: emptyChatID });
+    }, [navigation, setActiveChatID, setIsNewSession]);
 
     // Long-press on a session row in the header dropdown → rename / delete.
     // Native alerts present reliably; ActionSheetIOS does not render over the dropdown.
@@ -1008,7 +1011,8 @@ export function ChatDetailScreen() {
                             onPress={Keyboard.dismiss}
                             accessible={false}
                         >
-                            <View
+                            <Animated.View
+                                entering={FadeIn.duration(220)}
                                 style={{
                                     flex: 1,
                                     justifyContent: 'center',
@@ -1023,7 +1027,7 @@ export function ChatDetailScreen() {
                                     surfaceColor={theme.surface}
                                     showChips={false}
                                 />
-                            </View>
+                            </Animated.View>
                         </TouchableWithoutFeedback>
                     </KeyboardAvoidingView>
                 ) : (

@@ -70,4 +70,19 @@ export const createStyles = (theme: ThemeColors) =>
         modelPillPressed: {
             opacity: 0.7,
         },
+        thinkBadge: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 10,
+            height: 28,
+            borderRadius: 14,
+            backgroundColor: theme.surface,
+            borderWidth: 1,
+            borderColor: theme.accentAlt,
+        },
+        thinkBadgeText: {
+            color: theme.text,
+            fontSize: 12,
+            fontWeight: '600',
+        },
     });

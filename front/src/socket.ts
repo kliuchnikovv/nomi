@@ -402,7 +402,8 @@ export class ChatSocket {
                             op === 'tools' ||
                             op === 'model' ||
                             op === 'done' ||
-                            op === 'signal'
+                            op === 'signal' ||
+                            op === 'session_state'
                         ) {
                             const chatId = frame.chat_id;
                             if (chatId) {

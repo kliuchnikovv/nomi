@@ -828,6 +828,26 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                         {selectedModelName}
                     </Text>
                 </Pressable>
+                {thinkingLevel && thinkingLevel !== 'off' && (
+                    <Pressable
+                        onPress={() => {
+                            // Tap disables sticky thinking — server clears
+                            // session_flags.think_level and echoes session_state.
+                            setThinkingLevel('off');
+                            sendMessage('/think off');
+                        }}
+                        accessibilityLabel={`Disable thinking (currently ${thinkingLevel})`}
+                        style={({ pressed }) => [
+                            styles.thinkBadge,
+                            pressed && styles.modelPillPressed,
+                        ]}
+                    >
+                        <Text style={styles.thinkBadgeText} numberOfLines={1}>
+                            🧠{' '}
+                            {thinkingLevel === 'medium' ? 'med' : thinkingLevel}
+                        </Text>
+                    </Pressable>
+                )}
                 {chips && chips.length > 0 && onChipPress && (
                     <ScrollView
                         horizontal

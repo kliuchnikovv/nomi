@@ -19,13 +19,16 @@ type Chat struct {
 	Type     string    `gorm:"type:varchar(20);not null;default:'regular'"` // 'regular' or 'persistent'
 	ChatType string    `gorm:"type:text;not null;default:'standard'"`       // 'standard' or 'updates'
 
-	TeamID     *string    `gorm:"type:varchar(50);default:null"` // e.g. 'dnd_team', 'travel_planning'
-	ProjectID  *uuid.UUID `gorm:"type:uuid;default:null;index:idx_chats_project_id"`
-	Icon       string     `gorm:"type:varchar(10);default:''"`
-	CreatedAt  time.Time  `gorm:"not null"`
-	UpdatedAt  time.Time  `gorm:"not null;index;index:idx_chats_user_updated,priority:2,sort:desc"`
-	ArchivedAt *time.Time `gorm:"default:null"`
-	DeletedAt  gorm.DeletedAt
+	TeamID    *string    `gorm:"type:varchar(50);default:null"` // e.g. 'dnd_team', 'travel_planning'
+	ProjectID *uuid.UUID `gorm:"type:uuid;default:null;index:idx_chats_project_id"`
+	Icon      string     `gorm:"type:varchar(10);default:''"`
+	// SessionFlags holds per-chat sticky state set by slash commands
+	// ({"think_level":"high","compact_summary":"...","compact_up_to_msg_id":"..."}).
+	SessionFlags datatypes.JSON `gorm:"type:jsonb;not null;default:'{}'"`
+	CreatedAt    time.Time      `gorm:"not null"`
+	UpdatedAt    time.Time      `gorm:"not null;index;index:idx_chats_user_updated,priority:2,sort:desc"`
+	ArchivedAt   *time.Time     `gorm:"default:null"`
+	DeletedAt    gorm.DeletedAt
 }
 
 // Attachment represents a file attachment in the database
