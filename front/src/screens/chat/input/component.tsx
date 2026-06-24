@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CommandAutocomplete } from '../../../commands/CommandAutocomplete';
-import { CommandArgForm } from '../../../commands/CommandArgForm';
 import { CUSTOM_COMMAND_SCREENS } from '../../../commands/index';
-import type { CommandSpec } from '../../../commands/types';
+import { CommandRegistry } from '../../../commands/CommandRegistry';
+import { splitSlashCommand, parseTextArgs } from '../../../commands/parseTextArgs';
 import {
     ArrowUp,
     Plus,
@@ -128,7 +128,6 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
     const { activeChatID } = useMain();
 
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [pickedCommand, setPickedCommand] = useState<CommandSpec | null>(null);
     const { runCommand } = useChat();
 
     const handleSend = useCallback(async () => {
@@ -142,6 +141,29 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
             attachments.length > 0 && !attachments.some(a => a.loading);
 
         if (!text && !hasAttachments) return;
+
+        // Slash-command path: "/name args..." is parsed as plain text (no form
+        // UI) and dispatched via op=command_call. The whole remainder maps to
+        // the command's first declared arg (see parseTextArgs). Unknown command
+        // names fall through and send as a normal chat message.
+        const slash = splitSlashCommand(text);
+        if (slash) {
+            const specs = await CommandRegistry.load();
+            const spec = specs.find(s => s.name === slash.name);
+            if (spec) {
+                setIsSubmitting(true);
+                try {
+                    await runCommand(spec.name, parseTextArgs(spec, slash.rest));
+                } catch (e) {
+                    console.warn('command failed', e);
+                } finally {
+                    setIsSubmitting(false);
+                }
+                Keyboard.dismiss();
+                setValue('');
+                return;
+            }
+        }
 
         setIsSubmitting(true);
         try {
@@ -170,6 +192,7 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
         sendMessage,
         thinkingLevel,
         isSubmitting,
+        runCommand,
     ]);
 
     const openVoice = useCallback(() => {
@@ -822,42 +845,27 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                 )}
             </View>
 
-            {/* Slash-command autocomplete — shown above input when text starts with / */}
-            {value.startsWith('/') && !pickedCommand && (
+            {/* Slash-command autocomplete — a discovery aid shown while typing
+                the command name. Picking one inserts "/name " into the input;
+                args are then typed as plain text (no form). Hidden once a space
+                is typed (i.e. the user has moved on to entering arguments). */}
+            {value.startsWith('/') && !value.includes(' ') && (
                 <CommandAutocomplete
                     query={value.slice(1)}
                     onPick={(spec) => {
                         if (spec.name in CUSTOM_COMMAND_SCREENS) {
-                            // Task 14: navigate to dedicated CommandScreen
+                            // Dedicated full screen (opt-in), not the text path.
                             navigation.navigate('CommandScreen' as any, { spec } as any);
                             setValue('');
                         } else {
-                            setPickedCommand(spec);
-                            setValue('');
+                            setValue(`/${spec.name} `);
                         }
                     }}
-                />
-            )}
-
-            {/* Slash-command arg form — replaces input row while a command is selected */}
-            {pickedCommand && (
-                <CommandArgForm
-                    spec={pickedCommand}
-                    onSubmit={async (args) => {
-                        try {
-                            await runCommand(pickedCommand.name, args);
-                        } catch (e) {
-                            console.warn('command failed', e);
-                        } finally {
-                            setPickedCommand(null);
-                        }
-                    }}
-                    onCancel={() => setPickedCommand(null)}
                 />
             )}
 
             {/* Row 2: Input + action button */}
-            {!pickedCommand && <View style={styles.inputRow}>
+            <View style={styles.inputRow}>
                 <TextInput
                     multiline
                     autoCapitalize="sentences"
@@ -927,7 +935,7 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                         )}
                     </Pressable>
                 )}
-            </View>}
+            </View>
 
             <ContextMenu
                 visible={modelMenuVisible}

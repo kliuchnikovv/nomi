@@ -1396,7 +1396,14 @@ class RedisSession:
             tools_config=getattr(self, "tools_config_client", None),
             knowledge=knowledge,
             emit=self._emit_intermediate_frame,
-            client_tool_runner=getattr(self, "_run_client_tool", None),
+            # Same device round-trip runner the agent path uses (line ~1038):
+            # _send_client_action_and_wait(plugin, method, params). Gated on
+            # redis_worker; None when there's no worker to await the device reply.
+            client_tool_runner=(
+                self._send_client_action_and_wait
+                if getattr(self, "redis_worker", None)
+                else None
+            ),
             model=model,
             config_client=config_client,
         )

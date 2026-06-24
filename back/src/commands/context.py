@@ -27,7 +27,10 @@ class CommandContext:
     tools_config: Any  # ToolConfigClient.fetch_tools() result; opaque here
     knowledge: Any  # shared Agno Knowledge; opaque here
     emit: Callable[[dict], Awaitable[None]]
-    client_tool_runner: Callable | None = None
+    # Device round-trip for client-only integrations (IMAP, iOS Calendar/Reminders/
+    # Health/Contacts). Signature: async (plugin: str, method: str, params: dict) -> str.
+    # None when no worker is available to await the device reply.
+    client_tool_runner: Callable[[str, str, dict], Awaitable[str]] | None = None
     # Enablers (optional so existing call sites/tests keep working):
     model: Any = None  # Agno Model; built via AgentFactory.build_model(...)
     config_client: Any = None  # ToolConfigClient; fetches per-user ToolsConfig

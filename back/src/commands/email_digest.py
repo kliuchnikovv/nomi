@@ -1,9 +1,13 @@
 """email.digest command — one-tap summary of recent inbox emails.
 
-Pulls recent messages from the connected Gmail account, condenses subject/from/
-snippet into a compact prompt, and asks the model for a short digest + action
-list. The Gmail toolkit method is synchronous (blocking HTTP), so it runs in a
-worker thread; the model call uses ctx.complete (one-shot, no agent).
+Works over either path, whichever the user has connected:
+  - server-side Gmail (ctx.toolkit("gmail").get_recent_emails) → structured dicts
+  - client-only IMAP (ctx.client_tool_runner("imap", "get_recent_emails", ...))
+    → a plain-text "• [uid] from: subject" summary string from the device
+
+Either way we collect a text view of the inbox and ask the model for a short
+digest + action items via ctx.complete (one-shot, no agent). requires=() so the
+command is always offered; availability is reported as a clear handler error.
 """
 from __future__ import annotations
 
@@ -33,7 +37,7 @@ def _header(msg: dict[str, Any], name: str) -> str:
     return ""
 
 
-def _condense(messages: list[dict[str, Any]]) -> str:
+def _condense_server(messages: list[dict[str, Any]]) -> str:
     lines = []
     for i, msg in enumerate(messages, 1):
         subject = _header(msg, "Subject") or "(no subject)"
@@ -43,46 +47,58 @@ def _condense(messages: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+async def _gather_inbox(args: EmailDigestArgs, ctx: CommandContext) -> str | None:
+    """Return a text view of the inbox from whichever source is connected.
+
+    Returns "" when the source is connected but empty, or None when no email
+    integration is available at all.
+    """
+    server_tk = await ctx.toolkit("gmail")
+    if server_tk is not None:
+        await ctx.emit({"type": "reasoning", "message": "Reading your inbox…"})
+        messages = await asyncio.to_thread(server_tk.get_recent_emails, args.count)
+        return _condense_server(messages) if messages else ""
+
+    if ctx.client_tool_runner is not None:
+        await ctx.emit({"type": "reasoning", "message": "Reading your inbox…"})
+        # integration_id is resolved on-device when a single IMAP account exists.
+        raw = await ctx.client_tool_runner(
+            "imap", "get_recent_emails", {"mailbox": "INBOX", "limit": args.count}
+        )
+        return (raw or "").strip()
+
+    return None
+
+
 @command(
     name="email.digest",
     title="Summarize my inbox",
     description="Summarize your most recent emails into a short digest with action items.",
     args_model=EmailDigestArgs,
-    requires=("gmail",),
+    requires=(),
     surface="chat",
 )
 async def email_digest(args: EmailDigestArgs, ctx: CommandContext) -> CommandResult:
-    tk = await ctx.toolkit("gmail")
-    if tk is None:
-        return CommandResult.error(
-            code="gmail_not_connected",
-            message="Connect a Gmail account to use /digest.",
-        )
-
-    await ctx.emit({"type": "reasoning", "message": "Reading your inbox…"})
-
     try:
-        messages = await asyncio.to_thread(tk.get_recent_emails, args.count)
+        source_text = await _gather_inbox(args, ctx)
     except Exception:
         logger.exception("email.digest fetch failed")
-        return CommandResult.error(
-            code="FETCH_FAILED",
-            message="Failed to read your inbox.",
-        )
+        return CommandResult.error(code="FETCH_FAILED", message="Failed to read your inbox.")
 
-    if not messages:
-        return CommandResult.ok(text="Your inbox is empty.", data={"count": 0})
+    if source_text is None:
+        return CommandResult.error(
+            code="email_not_connected",
+            message="Connect Gmail or an IMAP account to use /digest.",
+        )
+    if not source_text:
+        return CommandResult.ok(text="Your inbox is empty.", data={"empty": True})
 
     prompt = (
         "Summarize the following recent emails into a brief digest for the user. "
         "Group by importance, keep it tight, and end with a short 'Action items' "
         "list of anything that needs a reply or decision. Use plain text.\n\n"
-        f"{_condense(messages)}"
+        f"{source_text}"
     )
     summary = await ctx.complete(prompt)
-    if not summary:
-        # Model unavailable — degrade to a plain subject list rather than failing.
-        subjects = [f"• {_header(m, 'Subject') or '(no subject)'}" for m in messages]
-        summary = "Recent emails:\n" + "\n".join(subjects)
-
-    return CommandResult.ok(text=summary, data={"count": len(messages)})
+    # Model unavailable — fall back to the raw inbox view rather than failing.
+    return CommandResult.ok(text=summary or source_text, data={"summarized": bool(summary)})

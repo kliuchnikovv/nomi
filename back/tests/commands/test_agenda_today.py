@@ -1,4 +1,4 @@
-"""Tests for agenda.today command (server Google Calendar via ctx.toolkit)."""
+"""Tests for agenda.today — server Google Calendar OR client iOS Calendar."""
 from __future__ import annotations
 
 import sys
@@ -41,14 +41,14 @@ def _make_ctx():
     )
 
 
-def _event(summary, start_dt, location=None):
+def _server_event(summary, start_dt, location=None):
     return {"summary": summary, "start": {"dateTime": start_dt}, "location": location}
 
 
-def test_agenda_is_registered():
+def test_agenda_is_registered_with_no_requires():
     spec = CommandRegistry.get("agenda.today")
     assert spec is not None
-    assert spec.requires == ("calendar",)
+    assert spec.requires == ()
 
 
 def test_agenda_defaults_to_today():
@@ -57,13 +57,13 @@ def test_agenda_defaults_to_today():
 
 
 @pytest.mark.asyncio
-async def test_agenda_filters_and_sorts_by_day():
+async def test_agenda_via_server_calendar():
     spec = CommandRegistry.get("agenda.today")
     tk = MagicMock()
     tk.get_upcoming_events = AsyncMock(return_value=[
-        _event("Standup", "2026-06-22T10:00:00+00:00"),
-        _event("Tomorrow thing", "2026-06-23T09:00:00+00:00"),
-        _event("Early call", "2026-06-22T08:30:00+00:00", location="Zoom"),
+        _server_event("Standup", "2026-06-22T10:00:00+00:00"),
+        _server_event("Tomorrow thing", "2026-06-23T09:00:00+00:00"),
+        _server_event("Early call", "2026-06-22T08:30:00+00:00", location="Zoom"),
     ])
     ctx = _make_ctx()
     ctx.toolkit = AsyncMock(return_value=tk)
@@ -75,6 +75,29 @@ async def test_agenda_filters_and_sorts_by_day():
     assert titles == ["Early call", "Standup"]  # sorted by time, tomorrow excluded
     assert result.data["events"][0]["time"] == "08:30"
     assert "@ Zoom" in result.text
+
+
+@pytest.mark.asyncio
+async def test_agenda_via_device_ios_calendar():
+    spec = CommandRegistry.get("agenda.today")
+    # iOS Calendar executor wraps a JSON array in a ```json fenced <details> block.
+    raw = (
+        "<details><summary>Calendar Events</summary>\n\n```json\n"
+        '[{"id":"1","title":"Gym","start":"2026-06-22T07:00:00+00:00",'
+        '"end":"2026-06-22T08:00:00+00:00","allDay":false,"location":"Club"}]'
+        "\n```\n</details>"
+    )
+    ctx = _make_ctx()
+    ctx.toolkit = AsyncMock(return_value=None)  # no server calendar
+    ctx.client_tool_runner = AsyncMock(return_value=raw)
+
+    result = await spec.handler(spec.args_model(day=date(2026, 6, 22)), ctx)
+
+    assert result.ok is True
+    plugin, method, params = ctx.client_tool_runner.call_args.args
+    assert plugin == "ios_calendar" and method == "get_events"
+    assert params["start_date"] == "2026-06-22T00:00:00"
+    assert result.data["events"] == [{"time": "07:00", "title": "Gym", "location": "Club"}]
 
 
 @pytest.mark.asyncio
@@ -91,10 +114,11 @@ async def test_agenda_empty_day():
 
 
 @pytest.mark.asyncio
-async def test_agenda_not_connected():
+async def test_agenda_no_calendar_integration():
     spec = CommandRegistry.get("agenda.today")
     ctx = _make_ctx()
     ctx.toolkit = AsyncMock(return_value=None)
+    ctx.client_tool_runner = None
     result = await spec.handler(spec.args_model(), ctx)
     assert result.ok is False
     assert result.error["code"] == "calendar_not_connected"
