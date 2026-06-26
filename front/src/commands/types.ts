@@ -2,6 +2,8 @@ export interface CommandSpec {
     name: string;
     title: string;
     description: string;
+    /** Optional argument syntax shown as a hint, e.g. "<off|low|medium|high>". */
+    usage?: string;
     requires: string[];
     missing: string[];
     args_schema: object; // JSON Schema 7

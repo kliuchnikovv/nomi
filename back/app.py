@@ -251,6 +251,7 @@ async def list_commands(x_user_id: str = Header(..., alias="X-User-ID")):
                 "name": spec.name,
                 "title": f"/{spec.name}",
                 "description": spec.summary,
+                "usage": spec.usage,
                 "requires": [],
                 "missing": [],
                 "args_schema": {},
@@ -472,7 +473,10 @@ async def rag_remove(request: dict):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-_RECAP_MODEL = "gpt-4o-mini"
+# Use a lightweight Gemini model — its API keys are always present (embeddings
+# and the default chat model rely on the same rotating pool), unlike gpt-4o-mini
+# which would route to OpenRouter and needs OPENROUTER_API_KEY.
+_RECAP_MODEL = "gemini-2.5-flash-lite"
 
 
 @app.post("/chats/recap")

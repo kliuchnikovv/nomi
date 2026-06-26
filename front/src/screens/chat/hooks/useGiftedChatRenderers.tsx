@@ -581,6 +581,7 @@ export function useGiftedChatRenderers({
             // Detect if this message is currently streaming (assistant text without ending punctuation)
             const isStreaming =
                 isAssistant &&
+                assistantWorking &&
                 messageText.length > 0 &&
                 !/[.!?。！？]\s*$/.test(messageText.trim()) &&
                 (!contentParts ||

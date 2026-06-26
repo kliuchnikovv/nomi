@@ -220,9 +220,12 @@ export function ChatDetailScreen() {
     // Which session the recap should summarize:
     //  - a loaded past session (single-chat mode, via the history sheet), or
     //  - a normally-opened existing chat (its own messages).
+    // Note: we deliberately do NOT gate on `isNewSession` — that flag stays true
+    // after launch until the first message is sent, even while navigating real
+    // chats. The RECAP_MIN message threshold already excludes fresh sessions.
     const recapChatId = loadedHistoryChat
         ? loadedHistoryChat.id
-        : !isNewSession && chatId !== emptyChatID
+        : chatId !== emptyChatID
         ? chatId
         : null;
     const recapMsgCount = loadedHistoryChat
@@ -237,6 +240,13 @@ export function ChatDetailScreen() {
 
     // Fetch the recap once the target session has enough history loaded.
     useEffect(() => {
+        console.log('[Recap] effect', {
+            recapChatId,
+            recapMsgCount,
+            recapDismissed,
+            hasRecap: recapText !== null,
+            min: RECAP_MIN,
+        });
         if (
             !recapChatId ||
             recapDismissed ||
@@ -246,10 +256,12 @@ export function ChatDetailScreen() {
             return;
         }
         let cancelled = false;
+        console.log('[Recap] requesting recap for', recapChatId);
         chatsApi
             .getRecap(recapChatId)
             .then(res => {
                 if (cancelled) return;
+                console.log('[Recap] response', res);
                 const text = res?.recap?.trim();
                 if (text) setRecapText(text);
             })

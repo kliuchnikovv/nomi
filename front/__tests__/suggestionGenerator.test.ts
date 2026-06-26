@@ -111,6 +111,15 @@ describe('generateFollowUps', () => {
         expect(result).toEqual([]);
     });
 
+    it('instructs the model to match the conversation language', async () => {
+        mockGenerateText.mockResolvedValueOnce({ text: '[]' });
+        await generateFollowUps('Привет! Чем могу помочь?', 'Сделай план');
+        const callArgs = mockGenerateText.mock.calls[0][0] as {
+            prompt: string;
+        };
+        expect(callArgs.prompt.toLowerCase()).toContain('same language');
+    });
+
     it('drops a prose preamble line that ends with a colon', async () => {
         mockGenerateText.mockResolvedValueOnce({
             text: 'Sure, here are some suggestions for what to say next:\nTell me more\nShow an example',

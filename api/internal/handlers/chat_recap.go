@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -74,6 +75,9 @@ func (h *ChatHandler) GenerateRecap(c *gin.Context) {
 
 	recap, err := h.requestRecap(ctx, payload)
 	if err != nil {
+		// Log the detail server-side; return a generic message so backend URLs
+		// and internal error text don't leak to the client.
+		log.Printf("recap generation failed (chat %s): %v", chatID, err)
 		apierror.Respond(c, apierror.NewInternalServerError("Failed to generate recap"))
 		return
 	}

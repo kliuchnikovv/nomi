@@ -84,6 +84,14 @@ export function CommandAutocomplete({ query, onPick }: CommandAutocompleteProps)
                 >
                   /{item.name}
                 </Text>
+                {item.usage ? (
+                  <Text
+                    style={[styles.usage, { color: theme.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {item.usage}
+                  </Text>
+                ) : null}
                 {disabled && (
                   <View style={[styles.missingBadge, { backgroundColor: theme.border }]}>
                     <Text style={[styles.missingText, { color: theme.textSecondary }]}>
@@ -133,6 +141,10 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  usage: {
+    fontSize: 12,
+    flexShrink: 1,
   },
   description: {
     fontSize: 12,

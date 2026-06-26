@@ -178,7 +178,9 @@ ${reply}
 
 Propose 2 to 4 very short follow-up messages the user could send next — quick replies, clarifying questions, or natural next steps. Write them in the user's voice (first person), each 40 characters or less.
 
-Output ONLY the suggestions, one per line, with no numbering, bullets, quotes, or any other text. Example:
+Write the suggestions in the SAME LANGUAGE as the conversation above (match the language of the assistant's reply and the user's message).
+
+Output ONLY the suggestions, one per line, with no numbering, bullets, quotes, or any other text. The example below shows the FORMAT only — always use the conversation's language, not necessarily English:
 Tell me more
 Show an example
 If nothing useful applies, output nothing.`;

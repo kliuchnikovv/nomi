@@ -346,8 +346,12 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
     // Process parts into groups - memoized
     const groupedParts = useProcessedParts(parts, showToolCalls, showReasoning);
 
-    // Detect if we're currently streaming
-    const streaming = useMemo(() => isStreamingActive(parts), [parts]);
+    // Detect if we're currently streaming — gate the heuristic on the real
+    // generation signal so completed replies (e.g. slash commands) don't keep
+    // a phantom blinking cursor when their text lacks ending punctuation.
+    const streaming =
+        useMemo(() => isStreamingActive(parts), [parts]) &&
+        !!chat?.assistantWorking;
 
     return (
         <>

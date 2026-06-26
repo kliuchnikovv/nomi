@@ -73,16 +73,16 @@ export const createStyles = (theme: ThemeColors) =>
         thinkBadge: {
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 10,
-            height: 28,
-            borderRadius: 14,
+            paddingHorizontal: 16,
+            height: 44,
+            borderRadius: 22,
             backgroundColor: theme.surface,
             borderWidth: 1,
             borderColor: theme.accentAlt,
         },
         thinkBadgeText: {
             color: theme.text,
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: '600',
         },
     });
