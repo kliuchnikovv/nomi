@@ -33,7 +33,10 @@ export function ChatRecapBanner({
             ]}
         >
             <View
-                style={[styles.iconChip, { backgroundColor: `${accentColor}20` }]}
+                style={[
+                    styles.iconChip,
+                    { backgroundColor: `${accentColor}20` },
+                ]}
             >
                 <Ionicons name="sparkles" size={16} color={accentColor} />
             </View>

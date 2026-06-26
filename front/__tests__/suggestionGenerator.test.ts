@@ -111,6 +111,14 @@ describe('generateFollowUps', () => {
         expect(result).toEqual([]);
     });
 
+    it('drops a prose preamble line that ends with a colon', async () => {
+        mockGenerateText.mockResolvedValueOnce({
+            text: 'Sure, here are some suggestions for what to say next:\nTell me more\nShow an example',
+        });
+        const result = await generateFollowUps('A reply');
+        expect(result).toEqual(['Tell me more', 'Show an example']);
+    });
+
     it('coerces array-of-objects into strings', async () => {
         mockGenerateText.mockResolvedValueOnce({
             text: '[{"text":"Write it here"},{"label":"Try later"}]',

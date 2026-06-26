@@ -129,7 +129,15 @@ async function runStringSuggestions(prompt: string): Promise<string[]> {
 
         const suggestions = items
             .map(s => s.trim())
-            .filter(s => s.length > 0 && s.length <= MAX_SUGGESTION_LENGTH)
+            // Drop prose preambles ("Sure, here are some suggestions:") that
+            // slip through the line-based fallback — a real suggestion is
+            // something the user would send, never a colon-terminated header.
+            .filter(
+                s =>
+                    s.length > 0 &&
+                    s.length <= MAX_SUGGESTION_LENGTH &&
+                    !s.endsWith(':'),
+            )
             .slice(0, MAX_SUGGESTIONS);
 
         if (__DEV__) {

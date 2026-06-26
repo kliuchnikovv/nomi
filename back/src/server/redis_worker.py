@@ -216,7 +216,7 @@ class RedisWorker:
         parts = channel.split(":")
         if len(parts) >= 3 and parts[0] == "chat" and parts[1] == "request":
             chat_id = parts[2]
-            logger.info(
+            logger.debug(
                 "[RedisWorker] RECEIVED %s (data type=%s)",
                 Redis.CHANNEL_REQUEST.format(chat_id),
                 type(data).__name__,
@@ -339,7 +339,7 @@ class RedisWorker:
                 return
 
             if frame.op not in (Op.MESSAGE, Op.COMMAND_CALL):
-                logger.warning(
+                logger.debug(
                     "[RedisWorker] Ignoring unsupported op: %s for chat %s",
                     frame.op,
                     chat_id,
