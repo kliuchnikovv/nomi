@@ -39,6 +39,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&AuditSecurity{},
 		&User{},
 		&Project{},
+		&UserList{},
 		&ProjectDocument{},
 		&Chat{},
 		&Message{},

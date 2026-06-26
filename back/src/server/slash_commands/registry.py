@@ -179,6 +179,7 @@ def _register_builtin_handlers() -> None:
     from src.server.slash_commands.handlers import status as status_handler
     from src.server.slash_commands.handlers import compact as compact_handler
     from src.server.slash_commands.handlers import forget as forget_handler
+    from src.server.slash_commands.handlers import lists as lists_handler
     from src.server.slash_commands.handlers import reset as reset_handler
     from src.server.slash_commands.handlers import think as think_handler
     from src.server.slash_commands.handlers import usage as usage_handler
@@ -190,6 +191,7 @@ def _register_builtin_handlers() -> None:
     reset_handler.register()
     compact_handler.register()
     forget_handler.register()
+    lists_handler.register()
 
 
 _register_builtin_handlers()

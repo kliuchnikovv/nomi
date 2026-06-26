@@ -309,6 +309,13 @@ class AgentFactory:
             except Exception as e:
                 logger.warning("[Factory] Failed to build projects tool: %s", e)
 
+            try:
+                from src.tools.lists import ListsTools
+
+                local.append(ListsTools(user_id=user_id))
+            except Exception as e:
+                logger.warning("[Factory] Failed to build lists tool: %s", e)
+
         try:
             from src.tools.maps import MapsTool
 

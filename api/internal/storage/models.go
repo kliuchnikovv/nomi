@@ -106,6 +106,18 @@ type PluginData struct {
 	UpdatedAt  time.Time      `gorm:"not null"`
 }
 
+// UserList is a user-owned named list (groceries, todos…) managed via the
+// /list slash command and the agent's list tool. Scoped per user; the
+// (UserID, Name) pair is unique. Python reads/writes this table directly.
+type UserList struct {
+	ID        uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID    uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:idx_user_lists_user_name,priority:1"`
+	Name      string         `gorm:"type:text;not null;uniqueIndex:idx_user_lists_user_name,priority:2"`
+	Items     datatypes.JSON `gorm:"type:jsonb;not null;default:'[]'"` // ordered array of strings
+	CreatedAt time.Time      `gorm:"not null"`
+	UpdatedAt time.Time      `gorm:"not null"`
+}
+
 // Project represents a user-defined project that groups related chats
 type Project struct {
 	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
