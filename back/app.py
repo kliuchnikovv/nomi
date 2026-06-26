@@ -473,10 +473,9 @@ async def rag_remove(request: dict):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-# Use a lightweight Gemini model — its API keys are always present (embeddings
-# and the default chat model rely on the same rotating pool), unlike gpt-4o-mini
-# which would route to OpenRouter and needs OPENROUTER_API_KEY.
-_RECAP_MODEL = "gemini-2.5-flash-lite"
+# Lightweight GLM model via z.ai (ZAI_API_KEY is present — it powers the main
+# chat). Avoid gpt-4o-mini, which routes to OpenRouter and isn't configured here.
+_RECAP_MODEL = "glm-4.5-air"
 
 
 @app.post("/chats/recap")
