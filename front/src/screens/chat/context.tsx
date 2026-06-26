@@ -492,6 +492,68 @@ export function ChatProvider({
                 // Update store (always replace so refresh shows latest from server)
                 setMessagesToStore(chatID, data);
 
+                // On chat open: seed follow-up chips from the loaded history so the
+                // strip above the input isn't empty. Mirrors the post-reply trigger
+                // below; runs only when the chat ends on an assistant reply and we
+                // don't already have cached follow-ups (don't re-run on-device AFM
+                // every time the chat is reopened). Fire-and-forget, iOS-only inside.
+                if (
+                    data.length > 0 &&
+                    !useChatStore.getState().followUps[chatID]?.length
+                ) {
+                    const lastAssistant = [...data]
+                        .reverse()
+                        .find(m => m.role === 'assistant');
+                    const assistantText = (() => {
+                        const direct = (lastAssistant?.text ?? '').trim();
+                        if (direct) return direct;
+                        return (lastAssistant?.content_parts ?? [])
+                            .filter(
+                                (p: any) =>
+                                    p?.type === 'text' ||
+                                    p?.type === 'member_response',
+                            )
+                            .map((p: any) => p?.text ?? '')
+                            .join('\n')
+                            .trim();
+                    })();
+                    // Only when the last meaningful turn is an assistant reply.
+                    // If the chat ends on an unanswered user turn, reconcileRef
+                    // auto-resends it and the normal post-reply trigger fires.
+                    const lastMeaningful = [...data]
+                        .reverse()
+                        .find(m => m.role === 'assistant' || m.role === 'user');
+                    if (lastMeaningful?.role === 'assistant' && assistantText) {
+                        const lastUser = [...data]
+                            .reverse()
+                            .find(m => m.role === 'user');
+                        if (__DEV__) {
+                            console.log(
+                                '[FollowUps] generating on chat open for',
+                                chatID,
+                                'replyLen=',
+                                assistantText.length,
+                            );
+                        }
+                        generateFollowUps(assistantText, lastUser?.text)
+                            .then(items => {
+                                if (items.length > 0) {
+                                    useChatStore
+                                        .getState()
+                                        .setFollowUps(chatID, items);
+                                }
+                            })
+                            .catch(e => {
+                                if (__DEV__) {
+                                    console.log(
+                                        '[FollowUps] open-trigger error',
+                                        e,
+                                    );
+                                }
+                            });
+                    }
+                }
+
                 // History loaded: if it ends on an unanswered user turn (interrupted
                 // before a reply, not stopped), auto-resend it.
                 reconcileRef.current?.(chatID);

@@ -5,7 +5,6 @@
  *
  * Two flavors:
  *  - generateFollowUps: next messages the USER might send after an assistant reply.
- *  - generateStarterChips: opening prompts based on the user's recent topics.
  *
  * Output is a list of plain strings (these are next user messages, not action
  * buttons — so no command/url like actionExtractor).
@@ -16,7 +15,6 @@ import { runAfm } from './ai/afmQueue';
 
 // On-device generation is slow (~2-5s) and serialized; give it room.
 const SUGGESTION_TIMEOUT_MS = 12_000;
-const MAX_INPUT_LENGTH = 1_500;
 // Follow-ups: keep prompts small so on-device latency stays under the timeout.
 const FOLLOWUP_REPLY_LENGTH = 700;
 const FOLLOWUP_USER_LENGTH = 300;
@@ -176,31 +174,6 @@ Output ONLY the suggestions, one per line, with no numbering, bullets, quotes, o
 Tell me more
 Show an example
 If nothing useful applies, output nothing.`;
-
-    return runStringSuggestions(prompt);
-}
-
-/**
- * Suggest 3–4 short opening prompts based on the user's recent topics/activity.
- * `context` is free-form text (e.g. recent chat titles). Empty context → [].
- */
-export async function generateStarterChips(context: string): Promise<string[]> {
-    const ctx = context.trim().slice(0, MAX_INPUT_LENGTH);
-    if (!ctx) {
-        return [];
-    }
-
-    const prompt = `You suggest opening prompts for a user starting a new chat with an AI assistant.
-
-The user's recent topics/activity:
-${ctx}
-
-Propose 3 to 4 short prompts the user might want to start with, relevant to their recent topics. Write them in the user's voice (first person), each 40 characters or less.
-
-Output ONLY the prompts, one per line, with no numbering, bullets, quotes, or any other text. Example:
-Plan my week
-Summarize my emails
-If there is no useful context, output nothing.`;
 
     return runStringSuggestions(prompt);
 }

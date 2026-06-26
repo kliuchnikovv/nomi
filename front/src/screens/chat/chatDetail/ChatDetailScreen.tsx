@@ -46,10 +46,16 @@ import { useGiftedMessages } from '../hooks/useGiftedMessages';
 import { useGiftedChatRenderers } from '../hooks/useGiftedChatRenderers';
 import { useTheme } from '../../../context/ThemeContext';
 import { Attachment, MessageAction } from '../../main/models';
-import { sidebarApi, projectsApi, apiClient } from '../../../apiClient';
+import {
+    sidebarApi,
+    projectsApi,
+    apiClient,
+    chatsApi,
+} from '../../../apiClient';
 import { getApiUrl } from '../../../config';
 import type { Project } from '../../main/models';
 import { ProjectSuggestionBanner } from './ProjectSuggestionBanner';
+import { ChatRecapBanner } from './ChatRecapBanner';
 import { PersistentChatEmptyState, useChips } from './PersistentChatEmptyState';
 import { SuggestionChips } from './SuggestionChips';
 import { useChatStore } from '../../../store/chatStore';
@@ -176,17 +182,7 @@ export function ChatDetailScreen() {
     const inputBarHeight = 112;
 
     const giftedMessages = useGiftedMessages(messages, user?.id);
-    // Recent chat titles seed topic-aware starter chips (on-device, iOS).
-    const starterContext = useMemo(
-        () =>
-            (chats ?? [])
-                .map(c => c.title)
-                .filter((t): t is string => !!t && t !== 'New Chat')
-                .slice(0, 8)
-                .join('\n'),
-        [chats],
-    );
-    const chips = useChips(isNewSession, starterContext);
+    const chips = useChips(isNewSession);
 
     // Attachment state
     const [imageViewerVisible, setImageViewerVisible] = useState(false);
@@ -206,6 +202,45 @@ export function ChatDetailScreen() {
     const [suggestedProject, setSuggestedProject] = useState<Project | null>(
         null,
     );
+
+    // Recap banner (generated summary shown when opening an old chat). Dismissal
+    // is per-open: state resets on chat change, so it reappears next time.
+    const RECAP_MIN = 6; // keep in sync with recapMinMessages on the Go API
+    const [recapText, setRecapText] = useState<string | null>(null);
+    const [recapDismissed, setRecapDismissed] = useState(false);
+
+    // Reset recap state whenever the active chat changes.
+    useEffect(() => {
+        setRecapText(null);
+        setRecapDismissed(false);
+    }, [chatId]);
+
+    // Fetch the recap once an old chat with enough history is open.
+    useEffect(() => {
+        if (
+            isNewSession ||
+            chatId === emptyChatID ||
+            recapDismissed ||
+            recapText !== null ||
+            messages.length < RECAP_MIN
+        ) {
+            return;
+        }
+        let cancelled = false;
+        chatsApi
+            .getRecap(chatId)
+            .then(res => {
+                if (cancelled) return;
+                const text = res?.recap?.trim();
+                if (text) setRecapText(text);
+            })
+            .catch(e => {
+                console.warn('[Recap] failed to load recap:', e);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [chatId, isNewSession, recapDismissed, recapText, messages.length]);
 
     // History sheet state
     const [historySheetVisible, setHistorySheetVisible] = useState(false);
@@ -974,6 +1009,33 @@ export function ChatDetailScreen() {
                     />
                 </View>
             )}
+
+            {/* Generated chat recap (old sessions). Shown only when no project
+                suggestion banner is occupying the same slot. */}
+            {!isNewSession &&
+                !suggestedProject &&
+                recapText &&
+                !recapDismissed && (
+                    <View
+                        style={{
+                            position: 'absolute',
+                            top: headerHeight,
+                            left: 0,
+                            right: 0,
+                            zIndex: 11,
+                        }}
+                    >
+                        <ChatRecapBanner
+                            recap={recapText}
+                            onDismiss={() => setRecapDismissed(true)}
+                            accentColor={theme.accent}
+                            surfaceColor={theme.surface}
+                            textPrimaryColor={theme.textPrimary}
+                            textSecondaryColor={theme.textSecondary}
+                            borderColor={theme.border}
+                        />
+                    </View>
+                )}
 
             {/* Loaded history separator */}
             {loadedHistoryChat && historyMessages.length > 0 && (

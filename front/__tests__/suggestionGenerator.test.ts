@@ -1,8 +1,5 @@
 import { Platform } from 'react-native';
-import {
-    generateFollowUps,
-    generateStarterChips,
-} from '../src/services/suggestionGenerator';
+import { generateFollowUps } from '../src/services/suggestionGenerator';
 
 // Mock react-native Platform
 jest.mock('react-native', () => ({
@@ -142,33 +139,5 @@ describe('generateFollowUps', () => {
         mockGenerateText.mockRejectedValueOnce(new Error('AFM crash'));
         const result = await generateFollowUps('A reply');
         expect(result).toEqual([]);
-    });
-});
-
-describe('generateStarterChips', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-        (Platform as any).OS = 'ios';
-    });
-
-    it('returns [] for empty context without calling AFM', async () => {
-        const result = await generateStarterChips('   ');
-        expect(result).toEqual([]);
-        expect(mockGenerateText).not.toHaveBeenCalled();
-    });
-
-    it('parses a valid JSON array of strings', async () => {
-        mockGenerateText.mockResolvedValueOnce({
-            text: '["Plan my week", "Summarize my emails"]',
-        });
-        const result = await generateStarterChips('Recent: travel, email');
-        expect(result).toEqual(['Plan my week', 'Summarize my emails']);
-    });
-
-    it('returns [] on Android without calling AFM', async () => {
-        (Platform as any).OS = 'android';
-        const result = await generateStarterChips('Recent: travel');
-        expect(result).toEqual([]);
-        expect(mockGenerateText).not.toHaveBeenCalled();
     });
 });

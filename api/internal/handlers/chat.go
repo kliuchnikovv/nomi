@@ -7,16 +7,23 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/apierror"
+	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/services"
 )
 
 type ChatHandler struct {
-	service *services.ChatService
+	service        *services.ChatService
+	messageService *services.MessageService
+	cfg            *config.Config
+	recapClient    *http.Client
 }
 
-func NewChatHandler(service *services.ChatService) *ChatHandler {
+func NewChatHandler(service *services.ChatService, messageService *services.MessageService, cfg *config.Config) *ChatHandler {
 	return &ChatHandler{
-		service: service,
+		service:        service,
+		messageService: messageService,
+		cfg:            cfg,
+		recapClient:    &http.Client{Timeout: 60 * time.Second},
 	}
 }
 

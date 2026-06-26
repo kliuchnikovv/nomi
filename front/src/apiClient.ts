@@ -397,6 +397,11 @@ export const chatsApi = {
         apiClient.get<import('./screens/main/models').Message[]>(
             `${API_URL()}/chats/${chatId}/messages`,
         ),
+    getRecap: (chatId: string) =>
+        apiClient.post<{ recap: string; cached?: boolean }>(
+            `${API_URL()}/chats/${chatId}/recap`,
+            {},
+        ),
 };
 
 export const projectsApi = {

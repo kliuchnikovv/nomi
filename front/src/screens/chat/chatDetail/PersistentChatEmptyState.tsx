@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useAuth } from '../../auth/context';
 import { useConnectors } from '../../settings/connectors/context';
-import { generateStarterChips } from '../../../services/suggestionGenerator';
 
 interface Chip {
     label: string;
@@ -18,19 +17,11 @@ interface Props {
     showChips?: boolean;
 }
 
-/**
- * Starter chips for the empty chat. Returns static, integration-aware chips, and
- * (on iOS, when `enabled` and `recentContext` is non-empty) replaces them with
- * topic-aware chips generated on-device from the user's recent activity.
- */
-export function useChips(
-    enabled: boolean = true,
-    recentContext: string = '',
-): Chip[] {
+// `_enabled` is accepted for call-site compatibility; AFM generation removed.
+export function useChips(_enabled: boolean = true): Chip[] {
     const { integrations } = useConnectors();
-    const [generated, setGenerated] = useState<Chip[] | null>(null);
 
-    // Static, integration-aware fallback chips (used until/unless AFM produces some).
+    // Static, integration-aware starter chips for the empty chat.
     const staticChips = useMemo(() => {
         const chips: Chip[] = [];
         const hasGmail = integrations.some(
@@ -54,26 +45,7 @@ export function useChips(
         return chips.slice(0, 4);
     }, [integrations]);
 
-    // On-device (iOS) generation of topic-aware starter chips; silent no-op otherwise.
-    useEffect(() => {
-        if (!enabled || !recentContext) {
-            setGenerated(null);
-            return;
-        }
-        let cancelled = false;
-        generateStarterChips(recentContext)
-            .then(items => {
-                if (!cancelled && items.length > 0) {
-                    setGenerated(items.map(t => ({ label: t, text: t })));
-                }
-            })
-            .catch(() => {});
-        return () => {
-            cancelled = true;
-        };
-    }, [enabled, recentContext]);
-
-    return (generated ?? staticChips).slice(0, 4);
+    return staticChips;
 }
 
 export function PersistentChatEmptyState({

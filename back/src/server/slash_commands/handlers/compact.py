@@ -18,6 +18,7 @@ import logging
 import time
 from typing import Any
 
+from src.server.recap import _MAX_CHARS, summarize as _summarize
 from src.server.slash_commands.registry import (
     CommandSpec,
     SlashCommandContext,
@@ -27,19 +28,7 @@ from src.storage import chat_flags as _default_flags
 
 logger = logging.getLogger(__name__)
 
-# Bound the prompt — long conversations can blow the context window of the
-# summarizer otherwise. ~16k chars ≈ 4k tokens — fits any small model.
-_MAX_CHARS = 16_000
-
 _SUMMARY_MODEL = "gpt-4o-mini"
-
-_SUMMARY_PROMPT = (
-    "Summarize the conversation below in 1-2 paragraphs. Preserve concrete "
-    "facts, names, decisions, open questions, and the user's stated "
-    "preferences. Omit pleasantries. Write in the same language as the user. "
-    "Do not address the user — write a neutral third-person recap.\n\n"
-    "--- CONVERSATION ---\n{body}\n--- END ---\n\nSummary:"
-)
 
 
 def _runs_to_text(runs: list[Any]) -> str:
@@ -77,16 +66,6 @@ def _stringify(val: Any) -> str:
                 return v
         return str(val)
     return str(val)
-
-
-async def _summarize(model: Any, body: str) -> str:
-    """Run a single one-shot LLM call. Returns the summary string."""
-    from agno.models.message import Message
-
-    prompt = _SUMMARY_PROMPT.format(body=body)
-    response = await model.aresponse(messages=[Message(role="user", content=prompt)])
-    content = getattr(response, "content", None) or str(response)
-    return str(content).strip()
 
 
 async def handle(ctx: SlashCommandContext, args: str) -> None:

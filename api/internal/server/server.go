@@ -45,7 +45,7 @@ func New(
 
 	// Initialize handlers
 	var (
-		chatHandler        = handlers.NewChatHandler(ctr.ChatService)
+		chatHandler        = handlers.NewChatHandler(ctr.ChatService, ctr.MessageService, cfg)
 		projectHandler     = handlers.NewProjectHandler(ctr.ProjectService)
 		projectDocHandler  = handlers.NewProjectDocumentHandler(ctr.Storage, cfg, logger)
 		messageHandler     = handlers.NewMessageHandler(ctr.MessageService)
@@ -126,6 +126,7 @@ func New(
 	r.PUT("/api/chats/:id", wrapWithAuth(chatHandler.UpdateChat, authMiddleware))
 	r.DELETE("/api/chats/:id", wrapWithAuth(chatHandler.DeleteChat, authMiddleware))
 	r.POST("/api/chats/:id/archive-messages", wrapWithAuth(chatHandler.ArchiveMessages, authMiddleware))
+	r.POST("/api/chats/:id/recap", wrapWithAuth(chatHandler.GenerateRecap, authMiddleware))
 
 	// Projects API (protected)
 	r.GET("/api/projects", wrapWithAuth(projectHandler.ListProjects, authMiddleware))

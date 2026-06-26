@@ -2,6 +2,7 @@ import base64
 import json
 import os
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Optional, Any
@@ -469,6 +470,50 @@ async def rag_remove(request: dict):
     except Exception as e:
         logging.error("Failed to remove project document vectors: %s", e, exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+_RECAP_MODEL = "gpt-4o-mini"
+
+
+@app.post("/chats/recap")
+async def chats_recap(request: dict):
+    """Generate (or return a cached) recap of a chat's messages.
+
+    Called by the Go API when the user opens an old chat. The recap is cached in
+    ``chats.session_flags`` and only regenerated when the message count changes.
+    Expects ``{chat_id, user_id?, messages: [{role, text}]}``.
+    """
+    from src.server import recap as recap_util
+    from src.storage import chat_flags
+
+    chat_id = request.get("chat_id")
+    messages = request.get("messages") or []
+    if not chat_id:
+        return JSONResponse({"error": "chat_id is required"}, status_code=400)
+
+    try:
+        flags = await chat_flags.get_flags(str(chat_id))
+    except Exception as e:
+        logging.warning("[recap] get_flags failed: %s", e)
+        flags = {}
+
+    try:
+        recap, cached, updates = await recap_util.generate_recap(
+            messages, flags, container.agent_factory.build_model, _RECAP_MODEL
+        )
+    except Exception as e:
+        logging.error("[recap] generation failed: %s", e, exc_info=True)
+        return JSONResponse({"error": f"recap failed: {e}"}, status_code=500)
+
+    if updates:
+        try:
+            for key, value in updates.items():
+                await chat_flags.set_flag(str(chat_id), key, value)
+            await chat_flags.set_flag(str(chat_id), "chat_recap_at", int(time.time()))
+        except Exception as e:
+            logging.warning("[recap] persisting flags failed: %s", e)
+
+    return {"recap": recap, "cached": cached}
 
 
 @app.post("/voice/tts")
