@@ -33,6 +33,11 @@ type EmailAnalysisMode = 'device' | 'server';
 export const PLANNER_MODEL_KEY = '@genie_planner_model';
 export const PLANNER_PROVIDER_KEY = '@genie_planner_provider';
 
+// Chat recap source: server-side LLM (default) or on-device Apple FM.
+// Read by ChatDetailScreen when deciding how to generate the recap banner.
+export const RECAP_SOURCE_KEY = '@genie_recap_source';
+export type RecapSource = 'server' | 'device';
+
 type Nav = NativeStackNavigationProp<SettingsStackParamList, 'SettingsHome'>;
 
 export default function SettingsHomeScreen() {
@@ -49,6 +54,7 @@ export default function SettingsHomeScreen() {
 
     const [emailAnalysisMode, setEmailAnalysisMode] =
         useState<EmailAnalysisMode>('device');
+    const [recapSource, setRecapSource] = useState<RecapSource>('server');
     const [botName, setBotName] = useState('Souper');
     const [locationDisplay, setLocationDisplay] = useState('');
     const [currentThemeName, setCurrentThemeName] = useState(
@@ -137,6 +143,9 @@ export default function SettingsHomeScreen() {
             AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY).then(mode => {
                 if (mode === 'server' || mode === 'device')
                     setEmailAnalysisMode(mode);
+            });
+            AsyncStorage.getItem(RECAP_SOURCE_KEY).then(src => {
+                if (src === 'server' || src === 'device') setRecapSource(src);
             });
             botIdentityApi
                 .get()
@@ -232,6 +241,23 @@ export default function SettingsHomeScreen() {
                             );
                         }}
                         isFirst
+                    />
+                    <SettingsToggleRow
+                        label="Chat Recap"
+                        subtitle={
+                            recapSource === 'server'
+                                ? 'Server (GLM)'
+                                : 'Device (Apple FM)'
+                        }
+                        value={recapSource === 'server'}
+                        onToggle={async value => {
+                            const src: RecapSource = value
+                                ? 'server'
+                                : 'device';
+                            setRecapSource(src);
+                            await AsyncStorage.setItem(RECAP_SOURCE_KEY, src);
+                        }}
+                        isFirst={false}
                     />
                     <SettingsToggleRow
                         label="Server Voice (Gemini)"

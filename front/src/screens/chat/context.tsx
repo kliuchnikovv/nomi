@@ -353,6 +353,7 @@ export function ChatProvider({
         sidebarFilter,
         renameChat,
         setChatIcon,
+        touchChat,
         getChats,
         pendingInitialMessage,
         setPendingInitialMessage,
@@ -1133,6 +1134,10 @@ export function ChatProvider({
                     })
                     .catch(() => {});
             }
+            // Bump the session's activity time so the session list reorders
+            // immediately (server bumps updated_at too; this avoids a refetch).
+            const touchedId = persistentChatId ?? activeChatID;
+            if (touchedId && touchedId !== emptyChatID) touchChat(touchedId);
             await sendStreamingMessage(
                 text,
                 attachments,
@@ -1150,6 +1155,7 @@ export function ChatProvider({
             onSessionStarted,
             sendStreamingMessage,
             setActiveChatID,
+            touchChat,
         ],
     );
 

@@ -37,9 +37,10 @@ export function formatSessionDate(updatedAt: number | string): string {
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
 
-    const timeStr = date.toLocaleTimeString('en-US', {
+    const timeStr = date.toLocaleTimeString('en-GB', {
         hour: '2-digit',
         minute: '2-digit',
+        hour12: false,
     });
 
     if (diffDays === 0) return `Today, ${timeStr}`;

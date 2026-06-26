@@ -252,6 +252,17 @@ export function MainProvider({ children }: { children: ReactNode }) {
         }
     }
 
+    // Optimistically bump a chat's activity time so the session list reorders
+    // immediately when a message is sent (server also bumps updated_at; this
+    // avoids waiting for a refetch). updated_at is Unix seconds — see
+    // formatSessionDate.
+    function touchChat(chatId: string) {
+        const now = Math.floor(Date.now() / 1000);
+        setChats(prev =>
+            prev.map(c => (c.id === chatId ? { ...c, updated_at: now } : c)),
+        );
+    }
+
     // Ensure emptyChatID is always clean to show Dashboard
     useEffect(() => {
         if (activeChatID === emptyChatID) {
@@ -281,6 +292,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
         createNewChat,
         renameChat,
         setChatIcon,
+        touchChat,
         deleteChat,
         setActiveChatID,
         sidebarFilter,

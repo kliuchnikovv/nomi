@@ -34,7 +34,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ImageViewing from 'react-native-image-viewing';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
+import {
+    useRoute,
+    RouteProp,
+    useNavigation,
+    useFocusEffect,
+} from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useChat } from '../context';
@@ -56,6 +62,8 @@ import { getApiUrl } from '../../../config';
 import type { Project } from '../../main/models';
 import { ProjectSuggestionBanner } from './ProjectSuggestionBanner';
 import { ChatRecapBanner } from './ChatRecapBanner';
+import { generateRecapOnDevice } from '../../../services/recapGenerator';
+import { RECAP_SOURCE_KEY, type RecapSource } from '../../settings/screen';
 import { PersistentChatEmptyState, useChips } from './PersistentChatEmptyState';
 import { SuggestionChips } from './SuggestionChips';
 import { useChatStore } from '../../../store/chatStore';
@@ -178,6 +186,26 @@ export function ChatDetailScreen() {
     const styles = useMemo(() => createStyles(theme), [theme]);
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
 
+    const sortedChats = useMemo(() => {
+        const toMs = (v: number | string) =>
+            typeof v === 'number' ? v : Date.parse(String(v)) || 0;
+        return [...chats]
+            .filter(c => c.id !== emptyChatID)
+            .sort((a, b) => toMs(b.updated_at) - toMs(a.updated_at));
+    }, [chats]);
+
+    // Open the session dropdown scrolled to the active chat. Approx row height:
+    // 34 icon + 2×10 padding ≈ 54px. The ScrollView remounts on each open
+    // (conditional render), so contentOffset applies fresh every time.
+    const DROPDOWN_ROW_HEIGHT = 54;
+    const activeChatDropdownIndex = sortedChats.findIndex(
+        c => c.id === (activeChat?.id ?? activeChatID),
+    );
+    const dropdownInitialOffset =
+        activeChatDropdownIndex > 0
+            ? activeChatDropdownIndex * DROPDOWN_ROW_HEIGHT
+            : 0;
+
     const headerHeight = insets.top + 60; // insets.top + 8 padding + 44 pill + 8 padding
     const inputBarHeight = 112;
 
@@ -208,6 +236,16 @@ export function ChatDetailScreen() {
     const RECAP_MIN = 6; // keep in sync with recapMinMessages on the Go API
     const [recapText, setRecapText] = useState<string | null>(null);
     const [recapDismissed, setRecapDismissed] = useState(false);
+    // Experiment toggle (Settings → Chat Recap): server-side LLM vs on-device
+    // Apple FM. null = not loaded yet; the fetch effect waits for it.
+    const [recapSource, setRecapSource] = useState<RecapSource | null>(null);
+    useFocusEffect(
+        useCallback(() => {
+            AsyncStorage.getItem(RECAP_SOURCE_KEY).then(src => {
+                setRecapSource(src === 'device' ? 'device' : 'server');
+            });
+        }, []),
+    );
 
     // History sheet state
     const [historySheetVisible, setHistorySheetVisible] = useState(false);
@@ -228,19 +266,27 @@ export function ChatDetailScreen() {
         : chatId !== emptyChatID
         ? chatId
         : null;
-    const recapMsgCount = loadedHistoryChat
-        ? historyMessages.length
-        : messages.length;
+    const recapMessages = loadedHistoryChat ? historyMessages : messages;
+    const recapMsgCount = recapMessages.length;
+
+    // Guards against firing duplicate recap requests: messages stream in after
+    // a chat opens, re-rendering this component many times before recapText is
+    // set. We kick off exactly one request per (session + source).
+    const recapRequestedKeyRef = useRef<string | null>(null);
 
     // Reset recap state whenever the recap target session changes.
     useEffect(() => {
         setRecapText(null);
         setRecapDismissed(false);
+        recapRequestedKeyRef.current = null;
     }, [recapChatId]);
 
-    // Fetch the recap once the target session has enough history loaded.
+    // Generate the recap once the target session has enough history loaded.
+    // Source is the experiment toggle: 'server' hits the API, 'device' runs
+    // Apple FM locally on the already-loaded messages.
     useEffect(() => {
         console.log('[Recap] effect', {
+            recapSource,
             recapChatId,
             recapMsgCount,
             recapDismissed,
@@ -248,6 +294,7 @@ export function ChatDetailScreen() {
             min: RECAP_MIN,
         });
         if (
+            recapSource === null ||
             !recapChatId ||
             recapDismissed ||
             recapText !== null ||
@@ -255,23 +302,62 @@ export function ChatDetailScreen() {
         ) {
             return;
         }
-        let cancelled = false;
-        console.log('[Recap] requesting recap for', recapChatId);
-        chatsApi
-            .getRecap(recapChatId)
-            .then(res => {
-                if (cancelled) return;
-                console.log('[Recap] response', res);
-                const text = res?.recap?.trim();
-                if (text) setRecapText(text);
-            })
-            .catch(e => {
-                console.warn('[Recap] failed to load recap:', e);
-            });
-        return () => {
-            cancelled = true;
+        // One request per session+source — don't re-fire as messages stream in.
+        const requestKey = `${recapChatId}:${recapSource}`;
+        if (recapRequestedKeyRef.current === requestKey) return;
+        recapRequestedKeyRef.current = requestKey;
+
+        // Apply only if we're still on the same session+source. The ref is reset
+        // when the chat changes, so a late response for an old chat is discarded.
+        // (We must NOT cancel on every re-render — this effect re-runs as messages
+        // stream in, and a per-render cleanup would drop the in-flight response.)
+        const apply = (text: string | undefined | null) => {
+            if (recapRequestedKeyRef.current !== requestKey) return;
+            const trimmed = text?.trim();
+            if (trimmed) setRecapText(trimmed);
         };
-    }, [recapChatId, recapDismissed, recapText, recapMsgCount]);
+
+        if (recapSource === 'device') {
+            console.log(
+                '[Recap] generating on-device for',
+                recapChatId,
+                'msgs=',
+                recapMsgCount,
+            );
+            generateRecapOnDevice(recapMessages)
+                .then(text => {
+                    console.log(
+                        '[Recap] device result len=',
+                        text?.trim().length ?? 0,
+                    );
+                    apply(text);
+                })
+                .catch(e =>
+                    console.warn('[Recap] device generation failed:', e),
+                );
+        } else {
+            console.log(
+                '[Recap] requesting server recap for',
+                recapChatId,
+                'msgs=',
+                recapMsgCount,
+            );
+            chatsApi
+                .getRecap(recapChatId)
+                .then(res => {
+                    console.log('[Recap] server response', res);
+                    apply(res?.recap);
+                })
+                .catch(e => console.warn('[Recap] failed to load recap:', e));
+        }
+    }, [
+        recapSource,
+        recapChatId,
+        recapDismissed,
+        recapText,
+        recapMsgCount,
+        recapMessages,
+    ]);
 
     useEffect(() => {
         console.log(
@@ -785,89 +871,82 @@ export function ChatDetailScreen() {
                     <ScrollView
                         bounces={false}
                         showsVerticalScrollIndicator={false}
+                        contentOffset={{ x: 0, y: dropdownInitialOffset }}
                         keyboardShouldPersistTaps="handled"
                     >
-                        {chats
-                            .filter(c => c.id !== emptyChatID)
-                            .map(chat => (
-                                <Pressable
-                                    key={chat.id}
-                                    style={({ pressed }) => [
-                                        detailStyles.dropdownRow,
+                        {sortedChats.map(chat => (
+                            <Pressable
+                                key={chat.id}
+                                style={({ pressed }) => [
+                                    detailStyles.dropdownRow,
+                                    {
+                                        borderBottomColor: theme.border,
+                                        opacity: pressed ? 0.7 : 1,
+                                    },
+                                    chat.id === activeChat?.id && {
+                                        backgroundColor: theme.accent + '20',
+                                    },
+                                ]}
+                                onPress={() => {
+                                    setDropdownVisible(false);
+                                    (navigation as any).replace('ChatDetail', {
+                                        chatId: chat.id,
+                                    });
+                                }}
+                                onLongPress={() => handleSessionLongPress(chat)}
+                                delayLongPress={300}
+                            >
+                                <View
+                                    style={[
+                                        detailStyles.dropdownIcon,
                                         {
-                                            borderBottomColor: theme.border,
-                                            opacity: pressed ? 0.7 : 1,
-                                        },
-                                        chat.id === activeChat?.id && {
-                                            backgroundColor:
-                                                theme.accent + '20',
+                                            backgroundColor: theme.background,
                                         },
                                     ]}
-                                    onPress={() => {
-                                        setDropdownVisible(false);
-                                        (navigation as any).replace(
-                                            'ChatDetail',
-                                            { chatId: chat.id },
-                                        );
-                                    }}
-                                    onLongPress={() =>
-                                        handleSessionLongPress(chat)
-                                    }
-                                    delayLongPress={300}
                                 >
-                                    <View
-                                        style={[
-                                            detailStyles.dropdownIcon,
-                                            {
-                                                backgroundColor:
-                                                    theme.background,
-                                            },
-                                        ]}
-                                    >
-                                        {chat.icon &&
-                                        /\p{Emoji}/u.test(chat.icon) &&
-                                        !/^[0-9#*]$/.test(chat.icon) ? (
-                                            <Text style={{ fontSize: 16 }}>
-                                                {chat.icon}
-                                            </Text>
-                                        ) : (
-                                            <Ionicons
-                                                name="sparkles"
-                                                size={15}
-                                                color={theme.accent}
-                                            />
-                                        )}
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text
-                                            style={[
-                                                detailStyles.dropdownTitle,
-                                                { color: theme.text },
-                                            ]}
-                                            numberOfLines={1}
-                                        >
-                                            {chat.title || 'New Chat'}
+                                    {chat.icon &&
+                                    /\p{Emoji}/u.test(chat.icon) &&
+                                    !/^[0-9#*]$/.test(chat.icon) ? (
+                                        <Text style={{ fontSize: 16 }}>
+                                            {chat.icon}
                                         </Text>
-                                        <Text
-                                            style={[
-                                                detailStyles.dropdownDate,
-                                                { color: theme.textSecondary },
-                                            ]}
-                                        >
-                                            {formatSessionDate(chat.updated_at)}
-                                        </Text>
-                                    </View>
-                                    {chat.id === activeChat?.id && (
+                                    ) : (
                                         <Ionicons
-                                            name="checkmark"
-                                            size={16}
+                                            name="sparkles"
+                                            size={15}
                                             color={theme.accent}
                                         />
                                     )}
-                                </Pressable>
-                            ))}
-                        {chats.filter(c => c.id !== emptyChatID).length ===
-                            0 && (
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text
+                                        style={[
+                                            detailStyles.dropdownTitle,
+                                            { color: theme.text },
+                                        ]}
+                                        numberOfLines={1}
+                                    >
+                                        {chat.title || 'New Chat'}
+                                    </Text>
+                                    <Text
+                                        style={[
+                                            detailStyles.dropdownDate,
+                                            { color: theme.textSecondary },
+                                        ]}
+                                    >
+                                        {formatSessionDate(chat.updated_at)}
+                                    </Text>
+                                </View>
+                                {chat.id === activeChat?.id && (
+                                    <Ionicons
+                                        name="checkmark"
+                                        size={16}
+                                        color={theme.accent}
+                                    />
+                                )}
+                            </Pressable>
+                        ))}
+                        {sortedChats.length === 0 && (
                             <Text
                                 style={[
                                     detailStyles.dropdownEmpty,
@@ -1034,28 +1113,34 @@ export function ChatDetailScreen() {
             )}
 
             {/* Generated chat recap (old sessions). Shown only when no project
-                suggestion banner is occupying the same slot. */}
-            {!suggestedProject && recapText && !recapDismissed && (
-                <View
-                    style={{
-                        position: 'absolute',
-                        top: headerHeight,
-                        left: 0,
-                        right: 0,
-                        zIndex: 11,
-                    }}
-                >
-                    <ChatRecapBanner
-                        recap={recapText}
-                        onDismiss={() => setRecapDismissed(true)}
-                        accentColor={theme.accent}
-                        surfaceColor={theme.surface}
-                        textPrimaryColor={theme.textPrimary}
-                        textSecondaryColor={theme.textSecondary}
-                        borderColor={theme.border}
-                    />
-                </View>
-            )}
+                suggestion banner is occupying the same slot, and hidden while
+                the session-history sheet or the header session dropdown is open
+                so it doesn't cover the session list. */}
+            {!suggestedProject &&
+                !historySheetVisible &&
+                !dropdownVisible &&
+                recapText &&
+                !recapDismissed && (
+                    <View
+                        style={{
+                            position: 'absolute',
+                            top: headerHeight,
+                            left: 0,
+                            right: 0,
+                            zIndex: 11,
+                        }}
+                    >
+                        <ChatRecapBanner
+                            recap={recapText}
+                            onDismiss={() => setRecapDismissed(true)}
+                            accentColor={theme.accent}
+                            surfaceColor={theme.surface}
+                            textPrimaryColor={theme.textPrimary}
+                            textSecondaryColor={theme.textSecondary}
+                            borderColor={theme.border}
+                        />
+                    </View>
+                )}
 
             {/* Loaded history separator */}
             {loadedHistoryChat && historyMessages.length > 0 && (
