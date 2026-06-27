@@ -20,6 +20,7 @@ class TelegramDeliveryHandler:
         user_id = context.get("user_id")
         inline_message_id = context.get("telegram_inline_message_id")
         inline_query = context.get("telegram_inline_query") or ""
+        inline_action = context.get("telegram_inline_action") or "❓"
         if not text or (not chat_id and not inline_message_id):
             return
         try:
@@ -48,7 +49,7 @@ class TelegramDeliveryHandler:
                 # chat where the inline query was used. Keep the question visible.
                 body = text
                 if inline_query:
-                    body = f"<b>❓ {html.escape(inline_query)}</b>\n\n{text}"
+                    body = f"<b>{inline_action} {html.escape(inline_query)}</b>\n\n{text}"
                 await service.edit_inline_message(inline_message_id, body)
                 logger.info(
                     "Delivered inline response (inline_message_id=%s, text_len=%d)",

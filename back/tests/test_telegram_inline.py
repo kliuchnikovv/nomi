@@ -78,7 +78,7 @@ def _make_service() -> TelegramService:
 
 
 @pytest.mark.asyncio
-async def test_inline_query_linked_returns_card():
+async def test_inline_query_no_prefix_returns_action_menu():
     svc = _make_service()
     svc._find_linked_account_by_user = AsyncMock(
         return_value={"user_id": "u-1", "data": {"active": True}}
@@ -92,13 +92,39 @@ async def test_inline_query_linked_returns_card():
     args, kwargs = svc.answer_inline_query.call_args
     query_id, results = args[0], args[1]
     assert query_id == "q1"
+    # No prefix → one card per registered action, in registry order ("ask" first).
+    assert len(results) == len(_service_mod.INLINE_ACTIONS)
+    assert [_service_mod.decode_result_id(c["id"]) for c in results] == list(
+        _service_mod.INLINE_ACTIONS
+    )
+    first = results[0]
+    assert first["type"] == "article"
+    assert _service_mod.decode_result_id(first["id"]) == "ask"
+    # Placeholder shows the typed text; the answer replaces it later via edit.
+    assert "погода в Москве" in first["input_message_content"]["message_text"]
+    # An inline keyboard is required so Telegram returns inline_message_id.
+    assert first["reply_markup"]["inline_keyboard"]
+
+
+@pytest.mark.asyncio
+async def test_inline_query_prefix_returns_single_card():
+    svc = _make_service()
+    svc._find_linked_account_by_user = AsyncMock(
+        return_value={"user_id": "u-1", "data": {"active": True}}
+    )
+    svc.answer_inline_query = AsyncMock()
+
+    await svc._handle_inline_query(
+        {"id": "q1", "query": "tr: привет", "from": {"id": 777}}
+    )
+
+    results = svc.answer_inline_query.call_args[0][1]
     assert len(results) == 1
     card = results[0]
-    assert card["type"] == "article"
-    # Placeholder shows the question; the answer replaces it later via edit.
-    assert "погода в Москве" in card["input_message_content"]["message_text"]
-    # An inline keyboard is required so Telegram returns inline_message_id.
-    assert card["reply_markup"]["inline_keyboard"]
+    assert _service_mod.decode_result_id(card["id"]) == "translate"
+    # The prefix is stripped — only the payload is previewed.
+    assert card["description"] == "привет"
+    assert "🌐" in card["input_message_content"]["message_text"]
 
 
 @pytest.mark.asyncio
@@ -143,7 +169,12 @@ async def test_chosen_inline_result_dispatches_to_brain():
     svc._dispatch_to_brain = AsyncMock()
 
     await svc._handle_chosen_inline_result(
-        {"query": "что нового", "from": {"id": 555}, "inline_message_id": "im-7"}
+        {
+            "query": "что нового",
+            "from": {"id": 555},
+            "inline_message_id": "im-7",
+            "result_id": _service_mod.encode_result_id("ask"),
+        }
     )
 
     svc._dispatch_to_brain.assert_awaited_once()
@@ -152,6 +183,45 @@ async def test_chosen_inline_result_dispatches_to_brain():
     assert kwargs["genie_user_id"] == "u-9"
     assert kwargs["text"] == "что нового"
     assert kwargs["inline_message_id"] == "im-7"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "action_key,query,expected_payload",
+    [
+        ("ask", "что нового", "что нового"),
+        ("translate", "tr: привет", "привет"),
+        ("summarize", "длинный текст про всё", "длинный текст про всё"),
+        ("rewrite", "rewrite это надо поправить", "это надо поправить"),
+        ("explain", "объясни квантовая запутанность", "квантовая запутанность"),
+    ],
+)
+async def test_chosen_inline_result_renders_action_prompt(
+    action_key, query, expected_payload
+):
+    svc = _make_service()
+    svc._find_linked_account_by_user = AsyncMock(
+        return_value={"user_id": "u-9", "data": {"active": True}}
+    )
+    svc._dispatch_to_brain = AsyncMock()
+
+    await svc._handle_chosen_inline_result(
+        {
+            "query": query,
+            "from": {"id": 555},
+            "inline_message_id": "im-7",
+            "result_id": _service_mod.encode_result_id(action_key),
+        }
+    )
+
+    _, kwargs = svc._dispatch_to_brain.call_args
+    # Raw payload (prefix stripped) is saved to history…
+    assert kwargs["text"] == expected_payload
+    # …while the brain receives the action-templated prompt containing the payload.
+    expected_prompt = _service_mod.render_prompt(action_key, expected_payload)
+    assert kwargs["brain_prompt"] == expected_prompt
+    assert expected_payload in kwargs["brain_prompt"]
+    assert kwargs["inline_action_emoji"] == _service_mod.action_emoji(action_key)
 
 
 @pytest.mark.asyncio
@@ -296,3 +366,95 @@ async def test_delivery_falls_back_to_send_message_without_inline(monkeypatch):
     svc.edit_inline_message.assert_not_called()
     svc.send_message.assert_awaited_once()
     assert svc.send_message.call_args[0][0] == 42
+
+
+@pytest.mark.asyncio
+async def test_delivery_inline_header_uses_action_emoji(monkeypatch):
+    handler = _load_delivery_handler()
+
+    svc = MagicMock()
+    svc.enabled = True
+    svc.edit_inline_message = AsyncMock()
+    svc.send_message = AsyncMock()
+    svc.save_assistant_message = AsyncMock()
+    _install_fake_service(monkeypatch, svc)
+
+    await handler.deliver(
+        "Hello world",
+        {
+            "telegram_inline_message_id": "im-1",
+            "telegram_inline_query": "привет мир",
+            "telegram_inline_action": "🌐",
+            "telegram_chat_id": 42,
+            "user_id": "u-1",
+        },
+    )
+
+    body = svc.edit_inline_message.call_args[0][1]
+    # Header reflects the chosen action, not the generic "❓".
+    assert body.startswith("<b>🌐 привет мир</b>")
+    assert "❓" not in body
+    assert "Hello world" in body
+
+
+# ── inline_actions registry / parsing ─────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "text,expected_action,expected_payload",
+    [
+        ("обычный текст", None, "обычный текст"),
+        ("tr: привет", "translate", "привет"),
+        ("TR: Привет", "translate", "Привет"),  # case-insensitive prefix
+        ("перевод привет мир", "translate", "привет мир"),  # space separator
+        ("sum: длинный текст", "summarize", "длинный текст"),
+        ("tldr статья", "summarize", "статья"),
+        ("rewrite поправь это", "rewrite", "поправь это"),
+        ("объясни рекурсия", "explain", "рекурсия"),
+        ("eli5: рекурсия", "explain", "рекурсия"),
+        ("tr", None, "tr"),  # bare prefix, no payload → not a command
+        ("https://example.com", None, "https://example.com"),  # url has ":" but no prefix
+    ],
+)
+def test_parse_inline_command(text, expected_action, expected_payload):
+    action, payload = _service_mod.parse_inline_command(text)
+    assert action == expected_action
+    assert payload == expected_payload
+
+
+def test_decode_result_id_unknown_falls_back_to_ask():
+    assert _service_mod.decode_result_id("bogus|123") == "ask"
+    assert _service_mod.decode_result_id("") == "ask"
+    assert _service_mod.decode_result_id("translate|abc") == "translate"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_to_brain_inline_action_in_frame():
+    svc = _make_service()
+    conn = AsyncMock()
+    conn.fetch = AsyncMock(return_value=[])
+    conn.execute = AsyncMock()
+    conn.close = AsyncMock()
+    svc._get_db_conn = AsyncMock(return_value=conn)
+    fake_redis = AsyncMock()
+    fake_redis.publish = AsyncMock()
+    svc._get_redis = AsyncMock(return_value=fake_redis)
+
+    await svc._dispatch_to_brain(
+        chat_id=777,
+        genie_user_id="u-1",
+        data={},
+        text="привет",
+        brain_prompt="Переведи текст: привет",
+        inline_message_id="im-9",
+        inline_query="привет",
+        inline_action_emoji="🌐",
+    )
+
+    payload = json.loads(fake_redis.publish.call_args[0][1])["payload"]
+    # Brain receives the templated prompt, frame carries the action emoji.
+    assert payload["message"] == "Переведи текст: привет"
+    assert payload["telegram_inline_action"] == "🌐"
+    # The raw text (not the prompt) is what gets saved to plugin_data history.
+    saved = json.loads(conn.execute.call_args[0][5])
+    assert saved["text"] == "привет"
