@@ -810,12 +810,14 @@ class TelegramService:
 
         spec = INLINE_ACTIONS[action_key]
         emoji = spec["emoji"]
-        placeholder = f"<b>{emoji} {html.escape(payload_text)}</b>\n\n⏳ Nomi думает…"
+        placeholder = f"<b>{emoji} {html.escape(payload_text)}</b>\n\n⏳ Nomi is thinking…"
         return {
             "type": "article",
             "id": encode_result_id(action_key),
             "title": spec["title"],
-            "description": payload_text,
+            # Gray second line: a static hint about the action (not the typed text,
+            # which already shows in the placeholder message below).
+            "description": spec["hint"],
             "input_message_content": {
                 "message_text": placeholder,
                 "parse_mode": "HTML",
@@ -823,7 +825,9 @@ class TelegramService:
             # An inline keyboard is required for Telegram to return
             # inline_message_id in chosen_inline_result (used to edit in place).
             "reply_markup": {
-                "inline_keyboard": [[{"text": "⏳ Nomi думает…", "callback_data": "noop"}]]
+                "inline_keyboard": [
+                    [{"text": "⏳ Nomi is thinking…", "callback_data": "noop"}]
+                ]
             },
         }
 

@@ -122,9 +122,10 @@ async def test_inline_query_prefix_returns_single_card():
     assert len(results) == 1
     card = results[0]
     assert _service_mod.decode_result_id(card["id"]) == "translate"
-    # The prefix is stripped — only the payload is previewed.
-    assert card["description"] == "привет"
-    assert "🌐" in card["input_message_content"]["message_text"]
+    # The gray subtitle is the action's static hint.
+    assert card["description"] == _service_mod.INLINE_ACTIONS["translate"]["hint"]
+    # The prefix is stripped — only the payload is previewed in the placeholder.
+    assert "🌐 привет" in card["input_message_content"]["message_text"]
 
 
 @pytest.mark.asyncio

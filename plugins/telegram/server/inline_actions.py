@@ -14,16 +14,20 @@ import uuid
 from typing import Optional, Tuple
 
 # Order matters: this is the order cards appear in the inline menu ("ask" first).
+# "title" is the bold first line of the card; "hint" is the gray second line
+# (a static description of what the action does, not an echo of the typed text).
 INLINE_ACTIONS: dict[str, dict] = {
     "ask": {
         "emoji": "🔎",
-        "title": "🔎 Спросить Nomi",
+        "title": "🔎 Ask Nomi",
+        "hint": "Answer your question",
         "prefixes": [],
         "template": "{text}",
     },
     "translate": {
         "emoji": "🌐",
-        "title": "🌐 Перевести",
+        "title": "🌐 Translate",
+        "hint": "Auto RU ↔ EN",
         "prefixes": ["tr", "перевод", "перевести"],
         "template": (
             "Переведи текст. Если он на русском — переведи на английский, "
@@ -32,7 +36,8 @@ INLINE_ACTIONS: dict[str, dict] = {
     },
     "summarize": {
         "emoji": "📝",
-        "title": "📝 Сократить",
+        "title": "📝 Summarize",
+        "hint": "Short TL;DR",
         "prefixes": ["sum", "tldr", "кратко"],
         "template": (
             "Сократи текст до 1–2 предложений, сохранив ключевые факты. "
@@ -41,7 +46,8 @@ INLINE_ACTIONS: dict[str, dict] = {
     },
     "rewrite": {
         "emoji": "✍️",
-        "title": "✍️ Переписать",
+        "title": "✍️ Rewrite",
+        "hint": "Clearer & correct",
         "prefixes": ["rw", "rewrite", "переписать"],
         "template": (
             "Перепиши текст грамотно и понятно, сохранив смысл и язык оригинала. "
@@ -50,7 +56,8 @@ INLINE_ACTIONS: dict[str, dict] = {
     },
     "explain": {
         "emoji": "💡",
-        "title": "💡 Объяснить",
+        "title": "💡 Explain",
+        "hint": "In simple words",
         "prefixes": ["eli5", "объясни"],
         "template": "Объясни простыми словами:\n\n{text}",
     },
