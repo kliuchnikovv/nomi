@@ -8,10 +8,12 @@ expected frame to Redis.
 import importlib.util
 import json
 import os
+import sys
+import types
 
 import pytest
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 # The plugin lives at the repo root, outside back/'s import path, and `plugins`
 # is a namespace package that can clash during full-suite collection. Load the
@@ -33,6 +35,36 @@ _spec = importlib.util.spec_from_file_location(
 _service_mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_service_mod)
 TelegramService = _service_mod.TelegramService
+
+_DELIVERY_PATH = os.path.normpath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "plugins",
+        "telegram",
+        "server",
+        "delivery.py",
+    )
+)
+
+
+def _load_delivery_handler():
+    spec = importlib.util.spec_from_file_location(
+        "telegram_delivery_under_test", _DELIVERY_PATH
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.TelegramDeliveryHandler()
+
+
+def _install_fake_service(monkeypatch, svc):
+    """Wire a fake service so delivery's lazy ``from plugins...import get_service`` resolves."""
+    for name in ("plugins", "plugins.telegram", "plugins.telegram.server"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    leaf = types.ModuleType("plugins.telegram.server.service")
+    leaf.get_service = lambda: svc
+    monkeypatch.setitem(sys.modules, "plugins.telegram.server.service", leaf)
 
 
 def _make_service() -> TelegramService:
@@ -63,7 +95,10 @@ async def test_inline_query_linked_returns_card():
     assert len(results) == 1
     card = results[0]
     assert card["type"] == "article"
-    assert card["input_message_content"]["message_text"] == "погода в Москве"
+    # Placeholder shows the question; the answer replaces it later via edit.
+    assert "погода в Москве" in card["input_message_content"]["message_text"]
+    # An inline keyboard is required so Telegram returns inline_message_id.
+    assert card["reply_markup"]["inline_keyboard"]
 
 
 @pytest.mark.asyncio
@@ -108,7 +143,7 @@ async def test_chosen_inline_result_dispatches_to_brain():
     svc._dispatch_to_brain = AsyncMock()
 
     await svc._handle_chosen_inline_result(
-        {"query": "что нового", "from": {"id": 555}}
+        {"query": "что нового", "from": {"id": 555}, "inline_message_id": "im-7"}
     )
 
     svc._dispatch_to_brain.assert_awaited_once()
@@ -116,6 +151,7 @@ async def test_chosen_inline_result_dispatches_to_brain():
     assert kwargs["chat_id"] == 555
     assert kwargs["genie_user_id"] == "u-9"
     assert kwargs["text"] == "что нового"
+    assert kwargs["inline_message_id"] == "im-7"
 
 
 @pytest.mark.asyncio
@@ -153,6 +189,8 @@ async def test_dispatch_to_brain_publishes_frame():
         genie_user_id="u-1",
         data={"selected_model": ""},
         text="привет",
+        inline_message_id="im-3",
+        inline_query="привет",
     )
 
     fake_redis.publish.assert_awaited_once()
@@ -163,3 +201,56 @@ async def test_dispatch_to_brain_publishes_frame():
     assert payload["source"] == "telegram"
     assert payload["telegram_chat_id"] == 12345
     assert payload["message"] == "привет"
+    assert payload["telegram_inline_message_id"] == "im-3"
+
+
+# ── TelegramDeliveryHandler (inline vs direct) ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_delivery_edits_inline_message_in_place(monkeypatch):
+    handler = _load_delivery_handler()
+
+    svc = MagicMock()
+    svc.enabled = True
+    svc.edit_inline_message = AsyncMock()
+    svc.send_message = AsyncMock()
+    svc.save_assistant_message = AsyncMock()
+    _install_fake_service(monkeypatch, svc)
+
+    await handler.deliver(
+        "ответ от ИИ",
+        {
+            "telegram_inline_message_id": "im-1",
+            "telegram_inline_query": "вопрос",
+            "telegram_chat_id": 42,
+            "user_id": "u-1",
+        },
+    )
+
+    svc.send_message.assert_not_called()
+    svc.edit_inline_message.assert_awaited_once()
+    edited_id, body = svc.edit_inline_message.call_args[0][:2]
+    assert edited_id == "im-1"
+    assert "вопрос" in body and "ответ от ИИ" in body
+
+
+@pytest.mark.asyncio
+async def test_delivery_falls_back_to_send_message_without_inline(monkeypatch):
+    handler = _load_delivery_handler()
+
+    svc = MagicMock()
+    svc.enabled = True
+    svc.edit_inline_message = AsyncMock()
+    svc.send_message = AsyncMock()
+    svc.save_assistant_message = AsyncMock()
+    _install_fake_service(monkeypatch, svc)
+
+    await handler.deliver(
+        "ответ",
+        {"telegram_chat_id": 42, "user_id": "u-1"},
+    )
+
+    svc.edit_inline_message.assert_not_called()
+    svc.send_message.assert_awaited_once()
+    assert svc.send_message.call_args[0][0] == 42

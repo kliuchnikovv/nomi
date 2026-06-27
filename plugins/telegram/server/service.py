@@ -135,6 +135,24 @@ class TelegramService:
             {"inline_query_id": query_id, "results": results, **kwargs},
         )
 
+    async def edit_inline_message(
+        self, inline_message_id: str, text: str, parse_mode: str = "HTML"
+    ) -> Dict[str, Any]:
+        """Edit a message previously sent via an inline result, in place.
+
+        Used to replace the inline placeholder with the AI answer so it appears in
+        the chat where the inline query was used. Drops the placeholder keyboard.
+        """
+        return await self._call_api(
+            "editMessageText",
+            {
+                "inline_message_id": inline_message_id,
+                "text": text,
+                "parse_mode": parse_mode,
+                "reply_markup": {"inline_keyboard": []},
+            },
+        )
+
     # ─── File download (voice / media) ────────────────────
 
     async def _get_file_path(self, file_id: str) -> str:
@@ -603,12 +621,17 @@ class TelegramService:
         data: Dict[str, Any],
         text: str,
         is_voice: bool = False,
+        inline_message_id: Optional[str] = None,
+        inline_query: str = "",
     ) -> None:
         """Persist a user message, load history, and publish it to the brain via Redis.
 
         Shared by the direct-chat path (``_handle_regular_message``) and the inline
-        path (``_handle_chosen_inline_result``). ``chat_id`` is the Telegram chat the
-        AI response should be delivered back to.
+        path (``_handle_chosen_inline_result``). ``chat_id`` is the Telegram chat used
+        as the conversation key (and the fallback delivery target). When
+        ``inline_message_id`` is set, the delivery handler edits that inline message
+        in place — so the answer appears in the chat where the inline query was used,
+        not in the bot's private chat.
         """
         import uuid
 
@@ -687,6 +710,8 @@ class TelegramService:
                 "user_id": genie_user_id,
                 "source": "telegram",
                 "telegram_chat_id": chat_id,
+                "telegram_inline_message_id": inline_message_id,
+                "telegram_inline_query": inline_query,
                 "model": selected_model,
                 "endpoint": model_config.get("endpoint", "") if model_config else "",
                 "streaming": model_config.get("streaming", False)
@@ -737,9 +762,12 @@ class TelegramService:
     async def _handle_inline_query(self, query: Dict[str, Any]) -> None:
         """Answer an inline query (``@bot <text>``) with a trigger card.
 
-        The card does not contain an AI answer; selecting it posts the query text
-        and fires ``chosen_inline_result``, which dispatches the request to the brain.
+        The card posts a placeholder message and carries an inline keyboard, so
+        Telegram returns ``inline_message_id`` in ``chosen_inline_result``. That id
+        lets the delivery handler edit the message in place — the AI answer then
+        appears in the chat where the query was used, not in the bot's private chat.
         """
+        import html
         import uuid
 
         query_id = query.get("id", "")
@@ -765,12 +793,21 @@ class TelegramService:
             await self.answer_inline_query(query_id, [], cache_time=1, is_personal=True)
             return
 
+        placeholder = f"<b>❓ {html.escape(text)}</b>\n\n⏳ Nomi думает…"
         card = {
             "type": "article",
             "id": str(uuid.uuid4()),
             "title": "Спросить Nomi",
             "description": text,
-            "input_message_content": {"message_text": text},
+            "input_message_content": {
+                "message_text": placeholder,
+                "parse_mode": "HTML",
+            },
+            # An inline keyboard is required for Telegram to return
+            # inline_message_id in chosen_inline_result (used to edit in place).
+            "reply_markup": {
+                "inline_keyboard": [[{"text": "⏳ Nomi думает…", "callback_data": "noop"}]]
+            },
         }
         await self.answer_inline_query(
             query_id, [card], cache_time=1, is_personal=True
@@ -779,11 +816,13 @@ class TelegramService:
     async def _handle_chosen_inline_result(self, chosen: Dict[str, Any]) -> None:
         """Dispatch a chosen inline result to the brain.
 
-        The AI response is delivered to the user's private chat with the bot
-        (``chat_id == telegram_user_id``) via the standard delivery handler.
+        ``inline_message_id`` (present because the card carries an inline keyboard)
+        is forwarded so the delivery handler edits the posted message in place —
+        the answer lands in the chat where the inline query was used.
         """
         text = (chosen.get("query") or "").strip()
         tg_user_id = (chosen.get("from") or {}).get("id", 0)
+        inline_message_id = chosen.get("inline_message_id")
         if not text or not tg_user_id:
             return
 
@@ -796,6 +835,8 @@ class TelegramService:
             genie_user_id=account["user_id"],
             data=account["data"],
             text=text,
+            inline_message_id=inline_message_id,
+            inline_query=text,
         )
 
     async def _handle_callback_query(self, query: Dict[str, Any]) -> None:
