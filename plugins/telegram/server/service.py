@@ -695,6 +695,12 @@ class TelegramService:
         # Use a virtual chat_id based on the telegram_chat_id (not a real chat)
         virtual_chat_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"telegram:{chat_id}"))
 
+        # Public contexts (inline queries and group chats, which have negative chat
+        # ids in Telegram) use the lightweight "group" agent: web search only, no
+        # personal data. Private 1:1 chats keep the full personal "nomi" assistant.
+        is_group_chat = isinstance(chat_id, int) and chat_id < 0
+        agent_type = "group" if (inline_message_id or is_group_chat) else "nomi"
+
         r = await self._get_redis()
         frame = {
             "id": 0,
@@ -708,6 +714,7 @@ class TelegramService:
                 "role": "user",
                 "trace_id": str(uuid.uuid4()),
                 "user_id": genie_user_id,
+                "agent_type": agent_type,
                 "source": "telegram",
                 "telegram_chat_id": chat_id,
                 "telegram_inline_message_id": inline_message_id,

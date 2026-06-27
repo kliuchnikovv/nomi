@@ -10,6 +10,7 @@ from agno.knowledge import Knowledge
 from agno.models.base import Model
 from agno.vectordb.pgvector import PgVector
 
+from src.agents.group import build_group_agent
 from src.agents.nomi import NomiAgent
 from src.agents.planner import build_planner_agent
 from src.models.safe_gemini import SafeGemini
@@ -399,6 +400,32 @@ class AgentFactory:
         effective_type = (
             (command_desc.get("type") if command_desc else None) or agent_type or "nomi"
         ).lower()
+
+        # Group / inline chat: a lightweight, stateless agent with ONLY web search.
+        # Built early to bypass all personal-data tool assembly (integrations,
+        # client tools, knowledge, memory, delegation) — public chats must not
+        # touch the user's private data. It answers directly without confirmation.
+        if effective_type == "group":
+            group_tools: list[Toolkit | Any] = []
+            if not (model_name and model_name.startswith("gemma-")):
+                config = ToolsConfig()
+                config.add("web_search")
+                group_tools = list(await build_tools(config, knowledge=None))
+            agent = build_group_agent(
+                model=model,
+                tools=group_tools,
+                timezone=timezone,
+                debug_mode=self._debug_mode,
+                db=self._db,
+                session_id=session_id,
+            )
+            logger.info(
+                "[Factory] Built GroupAgent (web_search only, no personal tools) "
+                "for session=%s user=%s",
+                session_id,
+                user_id,
+            )
+            return AgentRunWrapper(agent, user_id or "", project_id=project_id)
 
         discovery_mode = (
             os.getenv("USE_DISCOVERY_TOOL") == "1"

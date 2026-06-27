@@ -202,6 +202,48 @@ async def test_dispatch_to_brain_publishes_frame():
     assert payload["telegram_chat_id"] == 12345
     assert payload["message"] == "привет"
     assert payload["telegram_inline_message_id"] == "im-3"
+    # Inline → lightweight public "group" agent (no personal data).
+    assert payload["agent_type"] == "group"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_agent_type_group_for_negative_chat_id():
+    svc = _make_service()
+    conn = AsyncMock()
+    conn.fetch = AsyncMock(return_value=[])
+    conn.execute = AsyncMock()
+    conn.close = AsyncMock()
+    svc._get_db_conn = AsyncMock(return_value=conn)
+    fake_redis = AsyncMock()
+    fake_redis.publish = AsyncMock()
+    svc._get_redis = AsyncMock(return_value=fake_redis)
+
+    # Negative chat id == Telegram group/supergroup.
+    await svc._dispatch_to_brain(
+        chat_id=-100200, genie_user_id="u-1", data={}, text="вопрос"
+    )
+    payload = json.loads(fake_redis.publish.call_args[0][1])["payload"]
+    assert payload["agent_type"] == "group"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_agent_type_nomi_for_private_chat():
+    svc = _make_service()
+    conn = AsyncMock()
+    conn.fetch = AsyncMock(return_value=[])
+    conn.execute = AsyncMock()
+    conn.close = AsyncMock()
+    svc._get_db_conn = AsyncMock(return_value=conn)
+    fake_redis = AsyncMock()
+    fake_redis.publish = AsyncMock()
+    svc._get_redis = AsyncMock(return_value=fake_redis)
+
+    # Positive chat id, no inline → private 1:1 chat keeps the full personal agent.
+    await svc._dispatch_to_brain(
+        chat_id=12345, genie_user_id="u-1", data={}, text="привет"
+    )
+    payload = json.loads(fake_redis.publish.call_args[0][1])["payload"]
+    assert payload["agent_type"] == "nomi"
 
 
 # ── TelegramDeliveryHandler (inline vs direct) ────────────────────────
