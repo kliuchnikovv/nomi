@@ -18,11 +18,13 @@ import redis.asyncio as redis
 try:  # normal package import (production)
     from plugins.telegram.server.inline_actions import (
         INLINE_ACTIONS,
+        TWEMOJI_THUMB_SIZE,
         action_emoji,
         decode_result_id,
         encode_result_id,
         parse_inline_command,
         render_prompt,
+        thumbnail_url,
     )
 except ImportError:  # loaded standalone by path (e.g. tests)
     import importlib.util as _ilu
@@ -32,11 +34,13 @@ except ImportError:  # loaded standalone by path (e.g. tests)
     _ia = _ilu.module_from_spec(_ia_spec)
     _ia_spec.loader.exec_module(_ia)
     INLINE_ACTIONS = _ia.INLINE_ACTIONS
+    TWEMOJI_THUMB_SIZE = _ia.TWEMOJI_THUMB_SIZE
     action_emoji = _ia.action_emoji
     decode_result_id = _ia.decode_result_id
     encode_result_id = _ia.encode_result_id
     parse_inline_command = _ia.parse_inline_command
     render_prompt = _ia.render_prompt
+    thumbnail_url = _ia.thumbnail_url
 
 logger = logging.getLogger(__name__)
 
@@ -818,6 +822,10 @@ class TelegramService:
             # Gray second line: a static hint about the action (not the typed text,
             # which already shows in the placeholder message below).
             "description": spec["hint"],
+            # Left icon: a colored Twemoji PNG for the action (Telegram fetches it).
+            "thumbnail_url": thumbnail_url(action_key),
+            "thumbnail_width": TWEMOJI_THUMB_SIZE,
+            "thumbnail_height": TWEMOJI_THUMB_SIZE,
             "input_message_content": {
                 "message_text": placeholder,
                 "parse_mode": "HTML",

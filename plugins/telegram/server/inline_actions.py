@@ -65,6 +65,11 @@ INLINE_ACTIONS: dict[str, dict] = {
 
 DEFAULT_ACTION = "ask"
 
+# Twemoji (jdecked fork) colored emoji PNGs, served by jsDelivr. Telegram fetches
+# the thumbnail server-side, so a public CDN needs no hosting on our end.
+TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72"
+TWEMOJI_THUMB_SIZE = 72
+
 # prefix (lowercased) -> action_key, built once from the registry.
 _PREFIX_TO_ACTION: dict[str, str] = {
     prefix.lower(): key
@@ -114,6 +119,17 @@ def decode_result_id(result_id: str) -> str:
 def action_emoji(action_key: str) -> str:
     """Emoji for an action (used in placeholder/answer headers)."""
     return INLINE_ACTIONS.get(action_key, INLINE_ACTIONS[DEFAULT_ACTION])["emoji"]
+
+
+def _twemoji_filename(emoji: str) -> str:
+    """Twemoji asset name: hyphen-joined lowercase codepoints, FE0F dropped."""
+    return "-".join(f"{ord(ch):x}" for ch in emoji if ord(ch) != 0xFE0F)
+
+
+def thumbnail_url(action_key: str) -> str:
+    """Public Twemoji PNG url for an action's emoji (Telegram card thumbnail)."""
+    emoji = action_emoji(action_key)
+    return f"{TWEMOJI_BASE}/{_twemoji_filename(emoji)}.png"
 
 
 def render_prompt(action_key: str, payload_text: str) -> str:

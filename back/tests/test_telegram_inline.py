@@ -423,6 +423,37 @@ def test_parse_inline_command(text, expected_action, expected_payload):
     assert payload == expected_payload
 
 
+@pytest.mark.parametrize(
+    "action_key,expected_file",
+    [
+        ("ask", "1f50e.png"),
+        ("translate", "1f310.png"),
+        ("summarize", "1f4dd.png"),
+        ("rewrite", "270d.png"),  # FE0F variation selector dropped
+        ("explain", "1f4a1.png"),
+    ],
+)
+def test_thumbnail_url_maps_emoji_to_twemoji(action_key, expected_file):
+    url = _service_mod.thumbnail_url(action_key)
+    assert url.startswith("https://")
+    assert url.endswith("/" + expected_file)
+
+
+@pytest.mark.asyncio
+async def test_inline_card_includes_thumbnail():
+    svc = _make_service()
+    svc._find_linked_account_by_user = AsyncMock(
+        return_value={"user_id": "u-1", "data": {"active": True}}
+    )
+    svc.answer_inline_query = AsyncMock()
+
+    await svc._handle_inline_query({"id": "q1", "query": "tr: hi", "from": {"id": 1}})
+
+    card = svc.answer_inline_query.call_args[0][1][0]
+    assert card["thumbnail_url"] == _service_mod.thumbnail_url("translate")
+    assert card["thumbnail_width"] and card["thumbnail_height"]
+
+
 def test_decode_result_id_unknown_falls_back_to_ask():
     assert _service_mod.decode_result_id("bogus|123") == "ask"
     assert _service_mod.decode_result_id("") == "ask"
