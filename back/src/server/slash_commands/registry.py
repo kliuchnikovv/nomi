@@ -21,7 +21,9 @@ from src.server.utils import make_meta
 logger = logging.getLogger(__name__)
 
 # Matches a leading slash command: "/foo bar baz" → ("foo", "bar baz").
-_SLASH_RE = re.compile(r"^\s*/([a-zA-Z_][a-zA-Z0-9_-]*)\s*(.*?)\s*$", re.DOTALL)
+# The name may contain dots so dotted sub-commands like "/list.add" work
+# (the dot is just part of the name — no special grouping semantics).
+_SLASH_RE = re.compile(r"^\s*/([a-zA-Z_][a-zA-Z0-9_.-]*)\s*(.*?)\s*$", re.DOTALL)
 
 
 @dataclass

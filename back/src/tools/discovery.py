@@ -28,6 +28,7 @@ LOCAL_TOOL_LABELS: dict[str, str] = {
     "planning": "day planning",
     "projects": "projects",
     "user_memory": "saving notes to memory",
+    "lists": "named lists (to-dos, shopping, movies, etc.)",
 }
 
 

@@ -206,4 +206,56 @@ async def test_missing_user(fake_store):
 async def test_help_lists_command(fake_store):
     ctx, sent = _make_ctx()
     await dispatch("/help", ctx)
-    assert "/list" in _first_text(sent)
+    body = _first_text(sent)
+    assert "/list" in body
+    assert "/list.add" in body
+
+
+# ── Dotted sub-commands ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_dotted_add(fake_store):
+    ctx, sent = _make_ctx()
+    await dispatch("/list.add groceries milk and eggs", ctx)
+    assert fake_store.data[("user-1", "groceries")] == ["milk and eggs"]
+    assert "Added to 'groceries'" in _first_text(sent)
+
+
+@pytest.mark.asyncio
+async def test_dotted_rm_by_index(fake_store):
+    fake_store.data[("user-1", "groceries")] = ["milk", "eggs"]
+    ctx, sent = _make_ctx()
+    await dispatch("/list.rm groceries 1", ctx)
+    assert fake_store.data[("user-1", "groceries")] == ["eggs"]
+    assert "Removed from 'groceries': milk" in _first_text(sent)
+
+
+@pytest.mark.asyncio
+async def test_dotted_del_and_clear(fake_store):
+    fake_store.data[("user-1", "movies")] = ["Dune"]
+    fake_store.data[("user-1", "todo")] = ["x"]
+
+    ctx, sent = _make_ctx()
+    await dispatch("/list.clear todo", ctx)
+    assert fake_store.data[("user-1", "todo")] == []
+    assert "Cleared 'todo'" in _first_text(sent)
+
+    ctx, sent = _make_ctx()
+    await dispatch("/list.del movies", ctx)
+    assert ("user-1", "movies") not in fake_store.data
+    assert "Deleted list 'movies'" in _first_text(sent)
+
+
+@pytest.mark.asyncio
+async def test_dotted_add_missing_args(fake_store):
+    ctx, sent = _make_ctx()
+    await dispatch("/list.add groceries", ctx)
+    assert "Usage: /list.add" in _first_text(sent)
+
+
+def test_parse_allows_dotted_names():
+    from src.server.slash_commands.registry import parse
+
+    assert parse("/list.add groceries milk") == ("list.add", "groceries milk")
+    assert parse("/list") == ("list", "")

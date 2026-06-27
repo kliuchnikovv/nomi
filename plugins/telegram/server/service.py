@@ -126,6 +126,15 @@ class TelegramService:
                     raise Exception(f"Telegram API error: {resp.status} - {error_desc}")
                 return result.get("result", {})
 
+    async def answer_inline_query(
+        self, query_id: str, results: list, **kwargs: Any
+    ) -> Dict[str, Any]:
+        """Answer an inline query with a list of results."""
+        return await self._call_api(
+            "answerInlineQuery",
+            {"inline_query_id": query_id, "results": results, **kwargs},
+        )
+
     # ─── File download (voice / media) ────────────────────
 
     async def _get_file_path(self, file_id: str) -> str:
@@ -167,7 +176,18 @@ class TelegramService:
 
         webhook_url = f"{base_url}/api/webhooks/telegram/webhook"
         try:
-            await self._call_api("setWebhook", {"url": webhook_url})
+            await self._call_api(
+                "setWebhook",
+                {
+                    "url": webhook_url,
+                    "allowed_updates": [
+                        "message",
+                        "callback_query",
+                        "inline_query",
+                        "chosen_inline_result",
+                    ],
+                },
+            )
             logger.info("Telegram webhook registered: %s", webhook_url)
             return True
         except Exception as e:
@@ -359,6 +379,14 @@ class TelegramService:
             await self._handle_callback_query(update["callback_query"])
             return
 
+        if update.get("inline_query"):
+            await self._handle_inline_query(update["inline_query"])
+            return
+
+        if update.get("chosen_inline_result"):
+            await self._handle_chosen_inline_result(update["chosen_inline_result"])
+            return
+
         message = update.get("message")
         if not message:
             return
@@ -516,8 +544,6 @@ class TelegramService:
         """Forward a regular Telegram message to the AI via Redis pub/sub.
         Messages are stored in plugin_data (not in the messages table).
         """
-        import uuid
-
         conn = await self._get_db_conn()
         try:
             row = await conn.fetchrow(
@@ -567,6 +593,24 @@ class TelegramService:
                 text = "[Photo received]"
             else:
                 return
+
+        await self._dispatch_to_brain(chat_id, genie_user_id, data, text, is_voice)
+
+    async def _dispatch_to_brain(
+        self,
+        chat_id: int,
+        genie_user_id: str,
+        data: Dict[str, Any],
+        text: str,
+        is_voice: bool = False,
+    ) -> None:
+        """Persist a user message, load history, and publish it to the brain via Redis.
+
+        Shared by the direct-chat path (``_handle_regular_message``) and the inline
+        path (``_handle_chosen_inline_result``). ``chat_id`` is the Telegram chat the
+        AI response should be delivered back to.
+        """
+        import uuid
 
         # Get selected model from plugin_data
         selected_model = data.get("selected_model", "")
@@ -658,6 +702,100 @@ class TelegramService:
             channel,
             genie_user_id,
             selected_model or "default",
+        )
+
+    # ─── Inline mode ─────────────────────────────────────
+
+    async def _find_linked_account_by_user(
+        self, telegram_user_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """Look up an active linked account by Telegram user id.
+
+        Inline updates carry no ``chat.id``, only ``from.id``, so linking is
+        resolved via ``telegram_user_id``. Returns ``{"user_id", "data"}`` or None.
+        """
+        conn = await self._get_db_conn()
+        try:
+            row = await conn.fetchrow(
+                """SELECT user_id, data FROM plugin_data
+                   WHERE plugin_name = $1 AND record_type = $2
+                     AND data->>'telegram_user_id' = $3""",
+                PLUGIN_NAME,
+                RECORD_TYPE_LINKED_ACCOUNT,
+                str(telegram_user_id),
+            )
+        finally:
+            await conn.close()
+
+        if not row:
+            return None
+        data = json.loads(row["data"])
+        if not data.get("active", True):
+            return None
+        return {"user_id": str(row["user_id"]), "data": data}
+
+    async def _handle_inline_query(self, query: Dict[str, Any]) -> None:
+        """Answer an inline query (``@bot <text>``) with a trigger card.
+
+        The card does not contain an AI answer; selecting it posts the query text
+        and fires ``chosen_inline_result``, which dispatches the request to the brain.
+        """
+        import uuid
+
+        query_id = query.get("id", "")
+        text = (query.get("query") or "").strip()
+        tg_user_id = (query.get("from") or {}).get("id", 0)
+
+        account = await self._find_linked_account_by_user(tg_user_id)
+
+        # Not linked → show a button that opens the bot's private chat.
+        if account is None:
+            await self.answer_inline_query(
+                query_id,
+                [],
+                cache_time=1,
+                is_personal=True,
+                switch_pm_text="Подключить аккаунт Nomi",
+                switch_pm_parameter="connect",
+            )
+            return
+
+        # Empty query → nothing to suggest yet.
+        if not text:
+            await self.answer_inline_query(query_id, [], cache_time=1, is_personal=True)
+            return
+
+        card = {
+            "type": "article",
+            "id": str(uuid.uuid4()),
+            "title": "Спросить Nomi",
+            "description": text,
+            "input_message_content": {"message_text": text},
+        }
+        await self.answer_inline_query(
+            query_id, [card], cache_time=1, is_personal=True
+        )
+
+    async def _handle_chosen_inline_result(self, chosen: Dict[str, Any]) -> None:
+        """Dispatch a chosen inline result to the brain.
+
+        The AI response is delivered to the user's private chat with the bot
+        (``chat_id == telegram_user_id``) via the standard delivery handler.
+        """
+        text = (chosen.get("query") or "").strip()
+        tg_user_id = (chosen.get("from") or {}).get("id", 0)
+        if not text or not tg_user_id:
+            return
+
+        account = await self._find_linked_account_by_user(tg_user_id)
+        if account is None:
+            return
+
+        await self._dispatch_to_brain(
+            chat_id=tg_user_id,
+            genie_user_id=account["user_id"],
+            data=account["data"],
+            text=text,
         )
 
     async def _handle_callback_query(self, query: Dict[str, Any]) -> None:
