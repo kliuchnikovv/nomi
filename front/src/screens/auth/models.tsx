@@ -6,6 +6,8 @@ export type User = {
     email: string;
     /** Voice screen speech source: on-device expo-speech, or server-side Gemini TTS. */
     voice_source?: 'on_device' | 'server_gemini';
+    /** Chat recap source: server-side recap (default), or native Agno session summaries. */
+    session_summary_mode?: 'off' | 'agno';
     updates_chat_id?: string | null;
     proactive_enabled?: boolean;
     /** IANA timezone, e.g. "Europe/Moscow". */

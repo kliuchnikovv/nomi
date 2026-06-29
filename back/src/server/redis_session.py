@@ -17,6 +17,7 @@ from agno.models.message import Message
 from src.agents.factory import AgentFactory
 from src.agents.nomi import (
     NomiAgent,
+    build_learned_knowledge_machine,
     build_learning_machine,
     build_memory_manager,
 )
@@ -116,11 +117,11 @@ async def _run_deferred_learning(chat_id: str) -> None:
         agent_factory = ctx.get("agent_factory")
         if db is None or not user_id or agent_factory is None:
             return
+        # Use the dedicated memory model (not the user's chat model): this is where
+        # the bulk of extraction happens, and it must be stable/reliable regardless
+        # of which chat model the user picked.
+        model = agent_factory.build_memory_model()
         try:
-            # Use the dedicated memory model (not the user's chat model): this is
-            # where the bulk of extraction happens, and it must be stable/reliable
-            # regardless of which chat model the user picked.
-            model = agent_factory.build_memory_model()
             lm = build_learning_machine(model, db, user_id, extract=True)
             await lm.aprocess(
                 messages=list(messages),
@@ -136,6 +137,26 @@ async def _run_deferred_learning(chat_id: str) -> None:
             logger.warning(
                 "[RedisSession] Deferred learning failed (non-fatal): %s", e
             )
+
+        # Learned-knowledge extraction (reusable insights) — deferred & off the
+        # reply path. Saved into shared Knowledge under namespace="user"; the reply
+        # agent reads them via its normal user-scoped search_knowledge_base.
+        knowledge = getattr(agent_factory, "_knowledge", None)
+        if knowledge is not None:
+            try:
+                lk = build_learned_knowledge_machine(model, knowledge)
+                await lk.aprocess(
+                    messages=list(messages),
+                    user_id=user_id,
+                    session_id=ctx.get("session_id"),
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning(
+                    "[RedisSession] Learned-knowledge extraction failed (non-fatal): %s",
+                    e,
+                )
 
 
 async def _deferred_learning_timer(chat_id: str) -> None:
@@ -1085,6 +1106,7 @@ class RedisSession:
                     if isinstance(getattr(self, "_project_context", None), dict)
                     else None
                 ),
+                session_summary_mode=str(payload.get("session_summary_mode") or "off"),
             )
         except Exception as e:
             logger.error(

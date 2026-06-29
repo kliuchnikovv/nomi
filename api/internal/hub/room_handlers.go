@@ -965,6 +965,12 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
+		// Inject the user's session-summary mode ('off' | 'agno') so the brain can
+		// enable native Agno session summaries (vs the default server-side recap).
+		if u, err := r.store.GetUserByID(ctx, r.initiatorID); err == nil && u != nil {
+			finalMap["session_summary_mode"] = u.SessionSummaryMode
+		}
+
 		// Inject user-supplied LLM provider keys (BYOK). Decrypt at-rest keys and
 		// expose them as "<provider>_api_key" (the field name the brain already
 		// reads) plus the user's preferred default provider. Used by the developer

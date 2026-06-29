@@ -181,6 +181,7 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req *GoogleLoginRequest) 
 type UpdateUserRequest struct {
 	WebSearchEnabled *bool   `json:"web_search_enabled"`
 	VoiceSource      *string `json:"voice_source"`
+	SessionSummaryMode *string `json:"session_summary_mode"`
 	ProactiveEnabled *bool   `json:"proactive_enabled"`
 	// Timezone is an IANA name (e.g. "Europe/Moscow"); nil = leave unchanged.
 	Timezone *string `json:"timezone"`
@@ -196,6 +197,11 @@ func (s *AuthService) UpdateUser(ctx context.Context, user *storage.User, req *U
 	if req.VoiceSource != nil {
 		if *req.VoiceSource == "on_device" || *req.VoiceSource == "server_gemini" {
 			user.VoiceSource = *req.VoiceSource
+		}
+	}
+	if req.SessionSummaryMode != nil {
+		if *req.SessionSummaryMode == "off" || *req.SessionSummaryMode == "agno" {
+			user.SessionSummaryMode = *req.SessionSummaryMode
 		}
 	}
 	if req.ProactiveEnabled != nil {

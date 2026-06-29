@@ -478,6 +478,27 @@ async def rag_remove(request: dict):
 _RECAP_MODEL = os.getenv("MEMORY_MODEL", DEFAULT_MEMORY_MODEL)
 
 
+def _read_agno_session_summary(session_id: str) -> str | None:
+    """Return the native Agno session summary text for a session, or None.
+
+    Reads the rolling summary Agno stores on the agent session. Best-effort:
+    returns None on any error (missing session, no summary yet, stubbed agno).
+    """
+    try:
+        db = getattr(container.agent_factory, "_db", None)
+        if db is None:
+            return None
+        from agno.db.base import SessionType
+
+        session = db.get_session(session_id, SessionType.AGENT, deserialize=True)
+        summary = getattr(session, "summary", None) if session else None
+        text = getattr(summary, "summary", None) if summary else None
+        return text.strip() if isinstance(text, str) and text.strip() else None
+    except Exception as e:
+        logging.warning("[recap] agno summary read failed: %s", e)
+        return None
+
+
 @app.post("/chats/recap")
 async def chats_recap(request: dict):
     """Generate (or return a cached) recap of a chat's messages.
@@ -493,6 +514,16 @@ async def chats_recap(request: dict):
     messages = request.get("messages") or []
     if not chat_id:
         return JSONResponse({"error": "chat_id is required"}, status_code=400)
+
+    # When the user opted into native Agno session summaries, prefer the rolling
+    # summary Agno already maintains for the session (session_id == chat_id for
+    # chats). Fall back to the server-side recap below when no summary exists yet
+    # (e.g. payload-mode chats, or before the first summary is generated).
+    if str(request.get("session_summary_mode") or "off") == "agno":
+        session_id = request.get("session_id") or chat_id
+        agno_summary = _read_agno_session_summary(str(session_id))
+        if agno_summary:
+            return {"recap": agno_summary, "cached": True}
 
     try:
         flags = await chat_flags.get_flags(str(chat_id))

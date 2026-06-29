@@ -15,6 +15,7 @@ from agno.tools import Toolkit, Function
 
 from agno.learn import (
     EntityMemoryConfig,
+    LearnedKnowledgeConfig,
     LearningMachine,
     LearningMode,
     SessionContextConfig,
@@ -160,6 +161,29 @@ def build_memory_manager(model, db) -> MemoryManager:
     )
 
 
+def build_learned_knowledge_machine(model, knowledge) -> LearningMachine:
+    """Deferred-only machine that extracts reusable insights into shared Knowledge.
+
+    `namespace="user"` scopes saves by user_id (the save path writes
+    ``{"namespace":"user","user_id":...}`` into vector metadata), so the reply
+    agent's existing ``search_knowledge_base`` — already filtered by user_id via
+    ``AgentRunWrapper.knowledge_filters`` — surfaces these insights WITHOUT putting
+    learning tools on the reply path. ``enable_agent_tools=False`` keeps it
+    extraction-only; ``mode=ALWAYS`` makes ``aprocess`` actually extract+save.
+    """
+    return LearningMachine(
+        db=None,
+        model=model,
+        knowledge=knowledge,
+        namespace="user",
+        learned_knowledge=LearnedKnowledgeConfig(
+            mode=LearningMode.ALWAYS,
+            namespace="user",
+            enable_agent_tools=False,
+        ),
+    )
+
+
 def build_learning_machine(model, db, user_id: str, *, extract: bool) -> LearningMachine:
     """Build the profile + entity LearningMachine.
 
@@ -202,6 +226,7 @@ class NomiAgent(Agent):
         session_id: str | None = None,
         num_history_runs: int = 6,
         enable_session_summaries: bool = False,
+        session_summary_manager=None,
         **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
         # Resolve effective identity values
@@ -285,6 +310,7 @@ class NomiAgent(Agent):
             session_id=session_id,
             num_history_runs=num_history_runs,
             enable_session_summaries=enable_session_summaries,
+            session_summary_manager=session_summary_manager,
         )
 
         # Dedicated model for off-path memory maintenance (conflict resolution).

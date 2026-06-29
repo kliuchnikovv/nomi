@@ -33,10 +33,9 @@ type EmailAnalysisMode = 'device' | 'server';
 export const PLANNER_MODEL_KEY = '@genie_planner_model';
 export const PLANNER_PROVIDER_KEY = '@genie_planner_provider';
 
-// Chat recap source: server-side LLM (default) or on-device Apple FM.
-// Read by ChatDetailScreen when deciding how to generate the recap banner.
-export const RECAP_SOURCE_KEY = '@genie_recap_source';
-export type RecapSource = 'server' | 'device';
+// Chat recap source is now a server-side per-user setting (`session_summary_mode`):
+// 'off' = server-side recap (default), 'agno' = native Agno session summaries.
+// Persisted via PUT /api/auth/me; the backend chooses the recap source from it.
 
 type Nav = NativeStackNavigationProp<SettingsStackParamList, 'SettingsHome'>;
 
@@ -54,7 +53,9 @@ export default function SettingsHomeScreen() {
 
     const [emailAnalysisMode, setEmailAnalysisMode] =
         useState<EmailAnalysisMode>('device');
-    const [recapSource, setRecapSource] = useState<RecapSource>('server');
+    const [summaryMode, setSummaryMode] = useState<'off' | 'agno'>(
+        user?.session_summary_mode ?? 'off',
+    );
     const [botName, setBotName] = useState('Souper');
     const [locationDisplay, setLocationDisplay] = useState('');
     const [currentThemeName, setCurrentThemeName] = useState(
@@ -82,6 +83,20 @@ export default function SettingsHomeScreen() {
                 if (user) updateUser({ ...user, voice_source: source });
             } catch (e) {
                 console.error('Failed to update voice source', e);
+            }
+        },
+        [user, updateUser],
+    );
+
+    const handleSummaryModeToggle = useCallback(
+        async (value: boolean) => {
+            try {
+                const mode = value ? 'agno' : 'off';
+                await authApi.updateMe({ session_summary_mode: mode });
+                setSummaryMode(mode);
+                if (user) updateUser({ ...user, session_summary_mode: mode });
+            } catch (e) {
+                console.error('Failed to update session_summary_mode', e);
             }
         },
         [user, updateUser],
@@ -139,13 +154,11 @@ export default function SettingsHomeScreen() {
             setServerVoice(user?.voice_source === 'server_gemini');
             setProactiveEnabled(user?.proactive_enabled ?? false);
             setDailyBriefTime(user?.daily_brief_time ?? null);
+            setSummaryMode(user?.session_summary_mode ?? 'off');
 
             AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY).then(mode => {
                 if (mode === 'server' || mode === 'device')
                     setEmailAnalysisMode(mode);
-            });
-            AsyncStorage.getItem(RECAP_SOURCE_KEY).then(src => {
-                if (src === 'server' || src === 'device') setRecapSource(src);
             });
             botIdentityApi
                 .get()
@@ -245,18 +258,12 @@ export default function SettingsHomeScreen() {
                     <SettingsToggleRow
                         label="Chat Recap"
                         subtitle={
-                            recapSource === 'server'
-                                ? 'Server (GLM)'
-                                : 'Device (Apple FM)'
+                            summaryMode === 'agno'
+                                ? 'Agno session summary (experimental)'
+                                : 'Server recap'
                         }
-                        value={recapSource === 'server'}
-                        onToggle={async value => {
-                            const src: RecapSource = value
-                                ? 'server'
-                                : 'device';
-                            setRecapSource(src);
-                            await AsyncStorage.setItem(RECAP_SOURCE_KEY, src);
-                        }}
+                        value={summaryMode === 'agno'}
+                        onToggle={handleSummaryModeToggle}
                         isFirst={false}
                     />
                     <SettingsToggleRow

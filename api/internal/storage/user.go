@@ -20,6 +20,9 @@ type User struct {
 	// VoiceSource selects how the voice screen produces speech:
 	// 'on_device' (expo-speech, default) or 'server_gemini' (server-side Gemini TTS).
 	VoiceSource      string         `json:"voice_source" gorm:"default:'on_device'"`
+	// SessionSummaryMode selects the chat recap/summary source:
+	// 'off' (server-side recap.py, default) or 'agno' (native Agno session summaries).
+	SessionSummaryMode string       `json:"session_summary_mode" gorm:"default:'off'"`
 	// Proactive / reactive-agent fields
 	UpdatesChatID    *uuid.UUID     `json:"updates_chat_id,omitempty" gorm:"type:uuid;default:null"`
 	QuietHoursStart  *string        `json:"quiet_hours_start,omitempty" gorm:"type:time;default:null"`

@@ -27,6 +27,10 @@ type recapRequest struct {
 	ChatID   string         `json:"chat_id"`
 	UserID   string         `json:"user_id"`
 	Messages []recapMessage `json:"messages"`
+	// SessionID is the Agno session key (== chat id for chats); lets the brain
+	// fetch a native session summary when SessionSummaryMode == "agno".
+	SessionID          string `json:"session_id"`
+	SessionSummaryMode string `json:"session_summary_mode"`
 }
 
 // GenerateRecap handles POST /api/chats/:id/recap. It loads the chat's messages
@@ -62,9 +66,11 @@ func (h *ChatHandler) GenerateRecap(c *gin.Context) {
 	}
 
 	payload := recapRequest{
-		ChatID:   chatID.String(),
-		UserID:   user.ID.String(),
-		Messages: make([]recapMessage, 0, len(messages)),
+		ChatID:             chatID.String(),
+		UserID:             user.ID.String(),
+		Messages:           make([]recapMessage, 0, len(messages)),
+		SessionID:          chatID.String(),
+		SessionSummaryMode: user.SessionSummaryMode,
 	}
 	for _, m := range messages {
 		payload.Messages = append(payload.Messages, recapMessage{

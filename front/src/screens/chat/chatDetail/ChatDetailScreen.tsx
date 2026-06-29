@@ -34,13 +34,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ImageViewing from 'react-native-image-viewing';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import {
-    useRoute,
-    RouteProp,
-    useNavigation,
-    useFocusEffect,
-} from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useChat } from '../context';
@@ -62,8 +56,6 @@ import { getApiUrl } from '../../../config';
 import type { Project } from '../../main/models';
 import { ProjectSuggestionBanner } from './ProjectSuggestionBanner';
 import { ChatRecapBanner } from './ChatRecapBanner';
-import { generateRecapOnDevice } from '../../../services/recapGenerator';
-import { RECAP_SOURCE_KEY, type RecapSource } from '../../settings/screen';
 import { PersistentChatEmptyState, useChips } from './PersistentChatEmptyState';
 import { SuggestionChips } from './SuggestionChips';
 import { useChatStore } from '../../../store/chatStore';
@@ -236,16 +228,6 @@ export function ChatDetailScreen() {
     const RECAP_MIN = 6; // keep in sync with recapMinMessages on the Go API
     const [recapText, setRecapText] = useState<string | null>(null);
     const [recapDismissed, setRecapDismissed] = useState(false);
-    // Experiment toggle (Settings → Chat Recap): server-side LLM vs on-device
-    // Apple FM. null = not loaded yet; the fetch effect waits for it.
-    const [recapSource, setRecapSource] = useState<RecapSource | null>(null);
-    useFocusEffect(
-        useCallback(() => {
-            AsyncStorage.getItem(RECAP_SOURCE_KEY).then(src => {
-                setRecapSource(src === 'device' ? 'device' : 'server');
-            });
-        }, []),
-    );
 
     // History sheet state
     const [historySheetVisible, setHistorySheetVisible] = useState(false);
@@ -282,19 +264,11 @@ export function ChatDetailScreen() {
     }, [recapChatId]);
 
     // Generate the recap once the target session has enough history loaded.
-    // Source is the experiment toggle: 'server' hits the API, 'device' runs
-    // Apple FM locally on the already-loaded messages.
+    // The source (server-side recap vs native Agno session summary) is decided
+    // by the backend from the user's session_summary_mode flag; the client just
+    // asks for the recap.
     useEffect(() => {
-        console.log('[Recap] effect', {
-            recapSource,
-            recapChatId,
-            recapMsgCount,
-            recapDismissed,
-            hasRecap: recapText !== null,
-            min: RECAP_MIN,
-        });
         if (
-            recapSource === null ||
             !recapChatId ||
             recapDismissed ||
             recapText !== null ||
@@ -302,62 +276,24 @@ export function ChatDetailScreen() {
         ) {
             return;
         }
-        // One request per session+source — don't re-fire as messages stream in.
-        const requestKey = `${recapChatId}:${recapSource}`;
+        // One request per session — don't re-fire as messages stream in.
+        const requestKey = recapChatId;
         if (recapRequestedKeyRef.current === requestKey) return;
         recapRequestedKeyRef.current = requestKey;
 
-        // Apply only if we're still on the same session+source. The ref is reset
-        // when the chat changes, so a late response for an old chat is discarded.
-        // (We must NOT cancel on every re-render — this effect re-runs as messages
-        // stream in, and a per-render cleanup would drop the in-flight response.)
+        // Apply only if we're still on the same session. The ref is reset when the
+        // chat changes, so a late response for an old chat is discarded.
         const apply = (text: string | undefined | null) => {
             if (recapRequestedKeyRef.current !== requestKey) return;
             const trimmed = text?.trim();
             if (trimmed) setRecapText(trimmed);
         };
 
-        if (recapSource === 'device') {
-            console.log(
-                '[Recap] generating on-device for',
-                recapChatId,
-                'msgs=',
-                recapMsgCount,
-            );
-            generateRecapOnDevice(recapMessages)
-                .then(text => {
-                    console.log(
-                        '[Recap] device result len=',
-                        text?.trim().length ?? 0,
-                    );
-                    apply(text);
-                })
-                .catch(e =>
-                    console.warn('[Recap] device generation failed:', e),
-                );
-        } else {
-            console.log(
-                '[Recap] requesting server recap for',
-                recapChatId,
-                'msgs=',
-                recapMsgCount,
-            );
-            chatsApi
-                .getRecap(recapChatId)
-                .then(res => {
-                    console.log('[Recap] server response', res);
-                    apply(res?.recap);
-                })
-                .catch(e => console.warn('[Recap] failed to load recap:', e));
-        }
-    }, [
-        recapSource,
-        recapChatId,
-        recapDismissed,
-        recapText,
-        recapMsgCount,
-        recapMessages,
-    ]);
+        chatsApi
+            .getRecap(recapChatId)
+            .then(res => apply(res?.recap))
+            .catch(e => console.warn('[Recap] failed to load recap:', e));
+    }, [recapChatId, recapDismissed, recapText, recapMsgCount]);
 
     useEffect(() => {
         console.log(

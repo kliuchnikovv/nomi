@@ -8,6 +8,7 @@ from agno.agent import Agent
 from agno.db.postgres import PostgresDb
 from agno.knowledge import Knowledge
 from agno.models.base import Model
+from agno.session.summary import SessionSummaryManager
 from agno.vectordb.pgvector import PgVector
 
 from src.agents.group import build_group_agent
@@ -402,6 +403,7 @@ class AgentFactory:
         byok: dict[str, str] | None = None,
         byok_default: str = "",
         project_id: str | None = None,
+        session_summary_mode: str = "off",
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -884,11 +886,16 @@ class AgentFactory:
                 logger.info("[Factory] Built PlannerAgent for agent_type=planner")
             else:
                 use_agno_sessions = storage_backend is not None
-                # Session summaries require the model to return structured JSON.
-                # Only Claude models do this reliably; others (GLM, Gemini, etc.)
-                # return empty or unstructured responses, causing parse failures.
-                supports_json_summaries = bool(
-                    model_name and model_name.startswith("claude-")
+                # Native session summaries are an opt-in experiment gated by the
+                # per-user `session_summary_mode` flag. Generation uses structured
+                # output; we pin a SessionSummaryManager on the dedicated memory
+                # model (gemini-2.5-flash supports native structured outputs), which
+                # is why the old claude-only gate is no longer needed.
+                summaries_on = use_agno_sessions and session_summary_mode == "agno"
+                session_summary_manager = (
+                    SessionSummaryManager(model=self.build_memory_model())
+                    if summaries_on
+                    else None
                 )
                 agent = NomiAgent(
                     db=self._db,
@@ -904,7 +911,8 @@ class AgentFactory:
                     identity=bot_identity,
                     session_id=session_id if use_agno_sessions else None,
                     num_history_runs=6,
-                    enable_session_summaries=use_agno_sessions and supports_json_summaries,
+                    enable_session_summaries=summaries_on,
+                    session_summary_manager=session_summary_manager,
                 )
 
             logger.info(
