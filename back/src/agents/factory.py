@@ -87,11 +87,39 @@ class AgentFactory:
         self._debug_mode = debug_mode
         self._vector_db: PgVector | None = None  # Legacy; prefer _knowledge
         self._knowledge: Knowledge | None = knowledge  # Shared Agno Knowledge
+        self._memory_model: Model | None = None  # Lazily-built dedicated memory model
 
     @property
     def config_client(self) -> ToolConfigClient:
         """Access to ToolConfigClient for requesting tools."""
         return self._config_client
+
+    def build_memory_model(self) -> Model:
+        """Build (and cache) the dedicated model used for memory/learning extraction.
+
+        Decoupled from the user-selected chat model: extraction quality should not
+        depend on the chat model, and the extraction path needs reliable structured
+        output / tool calls (GLM is unreliable here). Falls back to the factory's
+        default model if the configured memory model can't be built (e.g. missing
+        provider key).
+        """
+        if self._memory_model is not None:
+            return self._memory_model
+
+        from src.core.config import DEFAULT_MEMORY_MODEL
+
+        model_name = os.getenv("MEMORY_MODEL", DEFAULT_MEMORY_MODEL)
+        try:
+            self._memory_model = self.build_model(model_name, thinking="off")
+        except Exception as exc:
+            logger.warning(
+                "[Factory] Failed to build memory model '%s' (%s); "
+                "falling back to default chat model for memory.",
+                model_name,
+                exc,
+            )
+            self._memory_model = self._model
+        return self._memory_model
 
     # ... (build_model omitted)
 
@@ -865,6 +893,7 @@ class AgentFactory:
                 agent = NomiAgent(
                     db=self._db,
                     model=model,
+                    memory_model=self.build_memory_model(),
                     tools=tools,
                     debug_mode=self._debug_mode,
                     thinking=thinking,

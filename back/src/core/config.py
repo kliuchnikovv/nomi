@@ -11,6 +11,12 @@ from src.core.gemini_keys import KEY_MANAGER
 from src.models.safe_gemini import SafeGemini
 from src.tools.config import ToolConfigClient
 
+# Dedicated model for memory/learning extraction and recap/compaction. Decoupled
+# from the user-selected chat model so memory quality is stable regardless of the
+# chat model, and to avoid GLM's structured-output/tool-call unreliability on the
+# extraction path. Overridable via the MEMORY_MODEL env var.
+DEFAULT_MEMORY_MODEL = "gemini-2.5-flash"
+
 
 class Config:
     """Configuration class for Python backend."""
@@ -23,6 +29,8 @@ class Config:
         self.session_secret = os.getenv(
             "SESSION_SECRET", "dev-session-secret-change-me"
         )
+        # Dedicated model id used for memory extraction, learning, and recap.
+        self.memory_model_name = os.getenv("MEMORY_MODEL", DEFAULT_MEMORY_MODEL)
 
     @classmethod
     def from_env(cls) -> "Config":

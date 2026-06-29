@@ -15,6 +15,7 @@ mode) the handler reports honestly instead of pretending to work.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any
 
@@ -28,7 +29,12 @@ from src.storage import chat_flags as _default_flags
 
 logger = logging.getLogger(__name__)
 
-_SUMMARY_MODEL = "gpt-4o-mini"
+# Use the dedicated memory model (gemini-2.5-flash by default) so recap/compaction
+# runs on the same reliable model as memory extraction, not a separate provider.
+# Default kept in sync with src.core.config.DEFAULT_MEMORY_MODEL — read directly
+# from env here to keep this handler import-light (the slash registry imports it
+# at load time; importing config would pull in heavy agno deps).
+_SUMMARY_MODEL = os.getenv("MEMORY_MODEL", "gemini-2.5-flash")
 
 
 def _runs_to_text(runs: list[Any]) -> str:

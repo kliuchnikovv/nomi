@@ -13,10 +13,13 @@ from typing import Any
 
 from redis.exceptions import ConnectionError as RedisConnectionError
 from agno.media import Image
-from agno.memory.manager import MemoryManager
 from agno.models.message import Message
 from src.agents.factory import AgentFactory
-from src.agents.nomi import NomiAgent, build_learning_machine
+from src.agents.nomi import (
+    NomiAgent,
+    build_learning_machine,
+    build_memory_manager,
+)
 from src.storage.backend import AgnoBackend
 from src.constants import Redis as RedisConstants
 from src.server import stub_brain
@@ -114,17 +117,17 @@ async def _run_deferred_learning(chat_id: str) -> None:
         if db is None or not user_id or agent_factory is None:
             return
         try:
-            model = agent_factory.build_model(
-                ctx.get("model_name") or "gemini-2.5-flash-lite",
-                thinking="off",
-            )
+            # Use the dedicated memory model (not the user's chat model): this is
+            # where the bulk of extraction happens, and it must be stable/reliable
+            # regardless of which chat model the user picked.
+            model = agent_factory.build_memory_model()
             lm = build_learning_machine(model, db, user_id, extract=True)
             await lm.aprocess(
                 messages=list(messages),
                 user_id=user_id,
                 session_id=ctx.get("session_id"),
             )
-            mm = MemoryManager(model=model, db=db)
+            mm = build_memory_manager(model, db)
             await mm.acreate_user_memories(messages=list(messages), user_id=user_id)
             _dedup_memories(db, user_id)
         except asyncio.CancelledError:

@@ -17,7 +17,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from src.agents.nomi import NomiAgent
 
 from dotenv import load_dotenv
-from src.core.config import Config
+from src.core.config import Config, DEFAULT_MEMORY_MODEL
 from src.core.container import Container
 from src.plugins.loader import load_plugins, register_plugin_routes
 from src.commands import load_commands
@@ -473,9 +473,9 @@ async def rag_remove(request: dict):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-# Lightweight GLM model via z.ai (ZAI_API_KEY is present — it powers the main
-# chat). Avoid gpt-4o-mini, which routes to OpenRouter and isn't configured here.
-_RECAP_MODEL = "glm-4.5-air"
+# Dedicated memory model (gemini-2.5-flash by default) so recap runs on the same
+# reliable model as memory extraction. Overridable via MEMORY_MODEL.
+_RECAP_MODEL = os.getenv("MEMORY_MODEL", DEFAULT_MEMORY_MODEL)
 
 
 @app.post("/chats/recap")

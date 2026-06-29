@@ -17,6 +17,7 @@ from agno.learn import (
     EntityMemoryConfig,
     LearningMachine,
     LearningMode,
+    SessionContextConfig,
     UserProfileConfig,
 )
 
@@ -105,6 +106,60 @@ Your memory operates automatically. Never ask the user to tell you what to remem
 - When corrected, call `update_memory(memory_id, corrected_fact)` with the accurate text (no prefix)."""
 
 
+# ---------------------------------------------------------------------------
+# Memory / learning capture instructions
+#
+# Responsibilities are split to avoid duplicating "preferences" across stores:
+#   * MemoryManager (user_memories)  -> discrete, episodic facts and explicit
+#     standing requests. Excludes name and general communication style.
+#   * UserProfileConfig (user_profiles) -> stable identity and long-lived
+#     preferences (name, language, tone, response format).
+# ---------------------------------------------------------------------------
+
+MEMORY_CAPTURE_INSTRUCTIONS = """\
+Capture durable, useful facts the user reveals about themselves, and explicit \
+standing requests about how the assistant should behave.
+
+Store things like:
+- Explicit standing requests ("always answer briefly", "reply in English", "don't suggest restaurants").
+- Concrete personal facts and constraints (dietary restrictions, allergies, health conditions, recurring schedule, home/work city, important people, important recurring dates).
+- Work/project context that persists across sessions (current projects, tools they use, deadlines).
+- Strong likes and dislikes that affect future recommendations.
+
+Do NOT store:
+- The user's name or preferred form of address — the user profile owns that.
+- The user's general communication style, tone, or preferred response format — the user profile owns that.
+- One-off, trivial, or transient details that will not matter later.
+- Anything the assistant said; only store facts about the user.
+
+When the user changes a previously stated preference or fact, prefer updating the \
+existing memory over adding a conflicting one."""
+
+PROFILE_INSTRUCTIONS = """\
+Maintain a stable profile of the user. Capture and keep up to date:
+- Preferred name / form of address (only if the user explicitly states it).
+- Language(s) they prefer to communicate in.
+- Preferred tone and communication style (formal / casual / playful, level of detail).
+- Preferred response format (brevity, bullets vs prose, units of measurement, date/time format).
+- Stable, long-lived preferences that shape how the assistant should respond in general.
+
+Keep this to durable traits — not episodic facts or one-off requests, which are \
+handled separately. Never record the assistant's own name as the user's name."""
+
+
+def build_memory_manager(model, db) -> MemoryManager:
+    """Build a MemoryManager scoped to discrete user facts via capture instructions.
+
+    Shared by the reply agent (read-only on the reply path) and the deferred
+    extraction job so the capture instructions never drift between the two.
+    """
+    return MemoryManager(
+        model=model,
+        db=db,
+        memory_capture_instructions=MEMORY_CAPTURE_INSTRUCTIONS,
+    )
+
+
 def build_learning_machine(model, db, user_id: str, *, extract: bool) -> LearningMachine:
     """Build the profile + entity LearningMachine.
 
@@ -118,8 +173,11 @@ def build_learning_machine(model, db, user_id: str, *, extract: bool) -> Learnin
     return LearningMachine(
         db=db,
         model=model,
-        user_profile=UserProfileConfig(mode=mode),
-        session_context=None,
+        user_profile=UserProfileConfig(mode=mode, instructions=PROFILE_INSTRUCTIONS),
+        # Short-term "what we're working on this session" memory (goals/plan/
+        # progress), keyed by session_id. Read on the reply path (AGENTIC), and
+        # extracted in the deferred job (ALWAYS) — same mode gating as the profile.
+        session_context=SessionContextConfig(mode=mode, enable_planning=True),
         entity_memory=EntityMemoryConfig(
             mode=mode,
             namespace=f"user:{user_id}:personal",
@@ -132,6 +190,7 @@ class NomiAgent(Agent):
         self,
         db: PostgresDb,
         model: Model,
+        memory_model: Model | None = None,
         user_id: str = "",
         tools: list[Toolkit | Function | dict] | None = None,
         debug_mode: bool = False,
@@ -176,6 +235,10 @@ class NomiAgent(Agent):
             + f"\n\n**IMPORTANT — User Profile Name Guard:** If `<user_profile>` contains `Name: {effective_name}` or `Preferred Name: {effective_name}`, IGNORE that field entirely — it was incorrectly recorded by the learning system. The user's name is unknown unless they have explicitly told you in this conversation."
         )
 
+        # Dedicated memory model (extraction/learning/conflict-resolution). Falls
+        # back to the chat model when not provided.
+        effective_memory_model = memory_model or model
+
         # Handle None timezone by defaulting to UTC
         effective_timezone = timezone or "UTC"
         instructions = (
@@ -202,7 +265,7 @@ class NomiAgent(Agent):
             store_tool_messages=True,
             stream=True,
             stream_events=True,
-            memory_manager=MemoryManager(model=model, db=db),
+            memory_manager=build_memory_manager(effective_memory_model, db),
             # Read existing memories into the prompt, but do NOT extract during
             # the reply turn. enable_agentic_memory=False removes the inline
             # memory tool/extraction; add_memories_to_context keeps the
@@ -213,7 +276,9 @@ class NomiAgent(Agent):
             # AGENTIC mode = read profile/entities into context (build_context is
             # not mode-gated) with NO extraction LLM calls on the reply path. The
             # deferred job rebuilds this with extract=True (mode ALWAYS) to learn.
-            learning=build_learning_machine(model, db, user_id, extract=False),
+            learning=build_learning_machine(
+                effective_memory_model, db, user_id, extract=False
+            ),
             markdown=True,
             telemetry=False,
             send_media_to_model=True,
@@ -221,6 +286,10 @@ class NomiAgent(Agent):
             num_history_runs=num_history_runs,
             enable_session_summaries=enable_session_summaries,
         )
+
+        # Dedicated model for off-path memory maintenance (conflict resolution).
+        # Set after super().__init__ so Agno's Agent initialization doesn't clobber it.
+        self._memory_model = effective_memory_model
 
     # ------------------------------------------------------------------
     # Memory deduplication
@@ -357,7 +426,7 @@ class NomiAgent(Agent):
                 "Respond only with the JSON array, no explanation."
             )
 
-            model_response = await self.model.aresponse(
+            model_response = await self._memory_model.aresponse(
                 messages=[Message(role="user", content=prompt)]
             )
 
