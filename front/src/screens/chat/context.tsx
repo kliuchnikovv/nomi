@@ -395,20 +395,22 @@ export function ChatProvider({
     // frames are ephemeral, but background tasks are persisted server-side and
     // attached to a chat, so seed a card per task belonging to this chat. For
     // tasks awaiting approval, recover the pending request_id from their events.
-    useEffect(() => {
-        if (!activeChatID || activeChatID === emptyChatID || !token) return;
-        let cancelled = false;
-        (async () => {
+    // Rebuild the task-progress cards for a chat from the server's task list.
+    // Used both on chat open and after a WS reconnect (a reconnect triggers an
+    // isRefresh reload of /messages which does not carry these client-only
+    // cards, so we must re-seed them or the widget stays gone).
+    const seedTaskCards = useCallback(
+        async (chatId: string, isCancelled: () => boolean = () => false) => {
             try {
                 const all = await tasksApi.list();
-                if (cancelled || !Array.isArray(all)) return;
-                const mine = all.filter(t => t.chat_id === activeChatID);
+                if (isCancelled() || !Array.isArray(all)) return;
+                const mine = all.filter(t => t.chat_id === chatId);
                 for (const t of mine) {
                     let approvalRequestId: string | undefined;
                     if (t.status === 'waiting_input') {
                         try {
                             const detail = await tasksApi.get(t.id);
-                            if (cancelled) return;
+                            if (isCancelled()) return;
                             const req = (detail?.events ?? [])
                                 .filter(e => e.kind === 'approval_request')
                                 .pop();
@@ -417,8 +419,8 @@ export function ChatProvider({
                             // Fall through without approval controls.
                         }
                     }
-                    if (cancelled) return;
-                    useChatStore.getState().upsertTaskProgress(activeChatID, {
+                    if (isCancelled()) return;
+                    useChatStore.getState().upsertTaskProgress(chatId, {
                         task_id: t.id,
                         goal: t.goal,
                         status: t.status,
@@ -441,11 +443,18 @@ export function ChatProvider({
             } catch {
                 // Non-fatal: cards will still appear from live frames.
             }
-        })();
+        },
+        [],
+    );
+
+    useEffect(() => {
+        if (!activeChatID || activeChatID === emptyChatID || !token) return;
+        let cancelled = false;
+        seedTaskCards(activeChatID, () => cancelled);
         return () => {
             cancelled = true;
         };
-    }, [activeChatID, token]);
+    }, [activeChatID, token, seedTaskCards]);
 
     const [selectedTeamId, setSelectedTeamId] = useState<string | null>(
         AVAILABLE_TEAMS[0]?.id ?? null,
@@ -1732,6 +1741,9 @@ export function ChatProvider({
                             getMessagesRef.current?.(target, {
                                 isRefresh: true,
                             });
+                            // Re-seed task cards: the isRefresh reload does not
+                            // carry client-only task_progress cards.
+                            seedTaskCards(target);
                         } else {
                             reconcileRef.current?.();
                         }
@@ -1751,6 +1763,10 @@ export function ChatProvider({
                 const cid = activeChatIDRef.current;
                 if (cid && cid !== emptyChatID) {
                     getMessagesRef.current?.(cid, { isRefresh: true });
+                    // Re-seed task cards: the isRefresh reload does not carry
+                    // client-only task_progress cards, so the widget would
+                    // otherwise vanish until the chat is reopened.
+                    seedTaskCards(cid);
                 } else {
                     reconcileRef.current?.();
                 }
@@ -1768,6 +1784,7 @@ export function ChatProvider({
         handleClientAction,
         reportMessageError,
         reconcileLastMessage,
+        seedTaskCards,
     ]);
 
     // App resume: re-fetch the active chat so a reply that completed while we

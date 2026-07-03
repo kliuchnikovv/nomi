@@ -226,9 +226,20 @@ export const useChatStore = create<ChatStore>()(
                         !incomingIds.has(m.id) &&
                         !hasIncomingTwin(m),
                 );
+                // Preserve synthetic task-progress cards (id `task_<id>`, created
+                // client-side by upsertTaskProgress). The server /messages endpoint
+                // never returns these, so a refresh — notably the isRefresh reload
+                // fired on WS reconnect — would otherwise drop the widget and it
+                // wouldn't come back until the chat is closed and reopened.
+                const localTaskCards = current.filter(
+                    m =>
+                        (m as any)?.metadata?.type === 'task_progress' &&
+                        !incomingIds.has(m.id),
+                );
+                const carried = [...localCommandBubbles, ...localTaskCards];
                 let merged = messages;
-                if (localCommandBubbles.length > 0) {
-                    merged = [...messages, ...localCommandBubbles].sort(
+                if (carried.length > 0) {
+                    merged = [...messages, ...carried].sort(
                         (a, b) => (a.created_at ?? 0) - (b.created_at ?? 0),
                     );
                 }

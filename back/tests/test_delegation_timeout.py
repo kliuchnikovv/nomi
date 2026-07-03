@@ -31,9 +31,20 @@ async def test_short_timeout_trips():
 
 @pytest.mark.asyncio
 async def test_timeout_none_does_not_trip():
-    # Task mode passes timeout=None: a quick-but-non-instant run must complete.
+    # timeout=None disables the cap entirely: a quick run must complete.
     tools = DelegationTools(
         registry={"slow": lambda: _SlowAgent(0.02)}, timeout=None
+    )
+    out = await tools.delegate_to("slow", "do it")
+    assert out == "done"
+
+
+@pytest.mark.asyncio
+async def test_bounded_task_timeout_allows_quick_run():
+    # Task mode now passes a large but BOUNDED timeout (TASK_DELEGATION_TIMEOUT_S)
+    # instead of None: a quick run still completes well within the cap.
+    tools = DelegationTools(
+        registry={"slow": lambda: _SlowAgent(0.02)}, timeout=1800
     )
     out = await tools.delegate_to("slow", "do it")
     assert out == "done"

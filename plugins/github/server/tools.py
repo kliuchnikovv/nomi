@@ -310,6 +310,7 @@ class GitHubTools(Toolkit):
         Returns:
             Commit information
         """
+        owner, repo = await self._resolve_repo(owner, repo)
         # Guard: never commit directly to the default branch or master/main.
         # The agent must work on a feature branch and open a pull request.
         default_branch = await self._get_default_branch(owner, repo)
@@ -357,6 +358,7 @@ class GitHubTools(Toolkit):
         Returns:
             The created git ref
         """
+        owner, repo = await self._resolve_repo(owner, repo)
         base = from_branch or await self._get_default_branch(owner, repo)
         ref = await self._make_request(
             "GET", f"/repos/{owner}/{repo}/git/ref/heads/{base}"
@@ -396,6 +398,7 @@ class GitHubTools(Toolkit):
         Returns:
             The created pull request
         """
+        owner, repo = await self._resolve_repo(owner, repo)
         target = base or await self._get_default_branch(owner, repo)
         if head == target:
             raise ValueError("head and base must be different branches")

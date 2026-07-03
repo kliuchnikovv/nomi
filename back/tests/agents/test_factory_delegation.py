@@ -66,3 +66,43 @@ async def test_no_sandbox_no_delegate(monkeypatch):
     names = _names(captured)
     assert "delegation" not in names
     assert "sandbox_tools" not in names
+
+
+@pytest.mark.asyncio
+async def test_coding_model_built_for_subagents(monkeypatch):
+    """When a sandbox is present, a dedicated coding model is built (CODING_MODEL)."""
+    monkeypatch.delenv("USE_DISCOVERY_TOOL", raising=False)
+    monkeypatch.setenv("CODING_MODEL", "gemini-2.5-flash")
+
+    from src.agents.factory import AgentFactory
+    from src.tools.config import ToolConfigClient
+
+    mock_config_client = MagicMock(spec=ToolConfigClient)
+    mock_config_client.fetch_tools = AsyncMock(return_value=MagicMock(entries={}))
+    factory = AgentFactory(db=None, model=MagicMock(), config_client=mock_config_client)
+    factory.build_model = MagicMock(return_value=MagicMock())
+
+    monkeypatch.setattr(
+        "src.agents.factory.NomiAgent",
+        lambda db, model, tools, **kw: MagicMock(name="nomi"),
+    )
+    monkeypatch.setattr(
+        "src.agents.factory.build_tools",
+        AsyncMock(return_value=[_NamedTool("sandbox_tools")]),
+    )
+
+    await factory.build(
+        session_id="s",
+        user_id="u",
+        model_name="gemini-2.0-flash",
+        client_tool_runner=AsyncMock(),
+    )
+
+    # The dedicated coding model must have been built with thinking disabled.
+    coding_calls = [
+        c
+        for c in factory.build_model.call_args_list
+        if c.args and c.args[0] == "gemini-2.5-flash"
+    ]
+    assert coding_calls, "expected build_model('gemini-2.5-flash', ...) to be called"
+    assert coding_calls[0].kwargs.get("thinking") == "off"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
 from typing import Any, Awaitable, Callable
 
@@ -10,9 +11,10 @@ from agno.tools import Toolkit
 
 logger = logging.getLogger(__name__)
 
-# Overall wall-clock cap for a single delegation, so a runaway sub-agent can't
-# loop forever in the sandbox. Per-command timeouts in exec_command apply too.
-DELEGATION_TIMEOUT = 300
+# Overall wall-clock cap for a single synchronous (in-chat) delegation, so a
+# runaway sub-agent can't loop forever in the sandbox. Per-command timeouts in
+# exec_command apply too. Env-overridable via DELEGATION_TIMEOUT_S.
+DELEGATION_TIMEOUT = int(os.getenv("DELEGATION_TIMEOUT_S", "300"))
 
 AgentBuilder = Callable[[], Agent]
 

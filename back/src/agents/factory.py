@@ -740,22 +740,42 @@ class AgentFactory:
                 from src.tools.delegation import DELEGATION_TIMEOUT, DelegationTools
 
                 # In task mode runs are long-lived: relax the engineer's tool-call
-                # cap and drop the per-delegation wall-clock timeout (the task
-                # runner + STOP own cancellation). Both are env-overridable.
+                # cap and use a large but BOUNDED wall-clock timeout (a truly
+                # unbounded cap let a stuck delegation hang for ~2h). STOP still
+                # cancels via CancelledError regardless. Both are env-overridable.
                 if task_mode:
                     engineer_tool_limit = int(
                         os.getenv("TASK_SANDBOX_TOOL_CALL_LIMIT", "200")
                     )
-                    delegation_timeout = None
+                    delegation_timeout = int(
+                        os.getenv("TASK_DELEGATION_TIMEOUT_S", "1800")
+                    )
                 else:
                     engineer_tool_limit = int(
                         os.getenv("SANDBOX_TOOL_CALL_LIMIT", "25")
                     )
                     delegation_timeout = DELEGATION_TIMEOUT
 
+                # Coding sub-agents run the read-run-fix loop many times; forcing
+                # them onto the (often heavy, thinking-on) chat model made simple
+                # tasks crawl. Pin a dedicated, fast coding model (env CODING_MODEL),
+                # falling back to the chat model if it can't be built (e.g. missing
+                # provider keys).
+                coding_model = model
+                coding_model_name = os.getenv("CODING_MODEL", "gemini-2.5-flash")
+                try:
+                    coding_model = self.build_model(coding_model_name, thinking="off")
+                except Exception as e:
+                    logger.warning(
+                        "[Factory] Could not build coding model %r (%s); "
+                        "falling back to the chat model for sub-agents.",
+                        coding_model_name,
+                        e,
+                    )
+
                 registry = {
                     "sandbox_engineer": (
-                        lambda sb=sandbox_tool, m=model, lim=engineer_tool_limit: build_sandbox_engineer_agent(
+                        lambda sb=sandbox_tool, m=coding_model, lim=engineer_tool_limit: build_sandbox_engineer_agent(
                             model=m,
                             sandbox_tools=sb,
                             db=None,
@@ -774,7 +794,7 @@ class AgentFactory:
                     from plugins.sandbox.server.opencode_tools import OpenCodeTools
 
                     registry["developer"] = (
-                        lambda sb=sandbox_tool, m=model, lim=engineer_tool_limit, bk=byok_keys, bd=byok_default: build_developer_agent(
+                        lambda sb=sandbox_tool, m=coding_model, lim=engineer_tool_limit, bk=byok_keys, bd=byok_default: build_developer_agent(
                             model=m,
                             sandbox_tools=sb,
                             opencode_tools=OpenCodeTools(
