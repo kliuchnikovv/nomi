@@ -1,28 +1,28 @@
 ## What
-Auto-detect available LLM models from a given API key and endpoint for OpenAI-compatible providers.
+This PR adds the ability to auto-detect available LLM models by querying a provider's `/v1/models` endpoint using an API key and endpoint URL.
 
-## How it works
-- New module `back/src/models/model_detector.py` with `detect_available_models(base_url, api_key, provider=None)` function
-- Queries the OpenAI-compatible `GET /v1/models` endpoint to fetch available models
-- Returns a list of `ModelInfo` (Pydantic BaseModel with `id`, `created`, `owned_by`)
-- Graceful error handling: `AuthenticationError` (401), `EndpointNotSupportedError` (404), `ModelDetectionTimeoutError`, generic `ModelDetectionError`
-- Static model lists for non-OpenAI-compatible providers (Anthropic, Google Gemini)
-- Convenience wrapper `detect_models(provider, api_key, base_url=None)` resolves provider defaults
+## Why
+Currently, models are loaded from a static `config/models.json` file. This feature allows users to dynamically discover what models are available from their configured providers (OpenAI-compatible), reducing manual configuration overhead.
 
-## Supported Providers
-- **OpenAI** (`https://api.openai.com/v1`)
-- **OpenRouter** (`https://openrouter.ai/api/v1`)
-- **Groq** (`https://api.groq.com/openai/v1`)
-- **Together AI** (`https://api.together.xyz/v1`)
-- **Local Ollama** (`http://localhost:11434/v1`)
-- **Any custom OpenAI-compatible endpoint**
-- **Anthropic** (static list fallback)
-- **Google Gemini** (static list fallback)
+## How
+- **New endpoint**: `POST /api/v1/models/discover` accepts `{"apiKey": "...", "endpoint": "..."}` and returns a list of available models
+- **OpenAI-compatible**: Works with any provider that implements the `/v1/models` endpoint (OpenAI, OpenRouter, Together AI, etc.)
+- **Integration**: Built on top of the existing `ModelsHandler` pattern, with `*zap.Logger` for structured logging
 
-## How to test
+## Files Changed
+- `api/internal/handlers/model_discovery.go` (new) - Discovery logic and HTTP handler
+- `api/internal/handlers/model_discovery_test.go` (new) - Unit tests
+- `api/internal/handlers/models.go` (modified) - Added logger and discoverModelsFunc to ModelsHandler
+- `api/internal/server/server.go` (modified) - Registered new route and pass logger
+
+## Testing
+Run: `cd api && go test ./internal/handlers/ -v -run TestDiscoverModels`
+
+All tests pass: TestDiscoverModels and TestDiscoverModelsHandler.
+
+## Example
 ```bash
-cd back && pytest tests/models/test_model_detector.py -v
+curl -X POST http://localhost:8080/api/v1/models/discover \
+  -H 'Content-Type: application/json' \
+  -d '{"apiKey": "sk-...", "endpoint": "https://api.openai.com"}'
 ```
-
-## Tests
-38 unit tests covering: successful detection, 401/404/500 errors, timeout, network errors, non-JSON responses, malformed data, Anthropic/Gemini static fallback, custom endpoints, ModelInfo validation, exception hierarchy.

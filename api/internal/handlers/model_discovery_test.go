@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 )
@@ -75,6 +76,7 @@ func TestDiscoverModels(t *testing.T) {
 }
 
 func TestDiscoverModelsHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 	logger, _ := zap.NewDevelopment()
 
 	// Mock server for successful discovery
@@ -87,30 +89,32 @@ func TestDiscoverModelsHandler(t *testing.T) {
 
 	// Test successful discovery
 	reqBody := []byte(fmt.Sprintf(`{"api_key": "handler-key", "endpoint": "%s", "provider": "handler-provider"}`, successServer.URL))
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer(reqBody))
+	c.Request.Header.Set("Content-Type", "application/json")
 
 	h := NewModelsHandler("", logger) // db is not used in this handler, pass empty string for apiKey
 	h.discoverModelsFunc = DiscoverModels // Use actual DiscoverModels for handler test
-	h.DiscoverModelsHandler(rr, req)
+	h.DiscoverModelsHandler(c)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, http.StatusOK, rec.Code)
 	var models []Model
-	err := json.NewDecoder(rr.Body).Decode(&models)
+	err := json.NewDecoder(rec.Body).Decode(&models)
 	assert.NoError(t, err)
 	assert.Len(t, models, 1)
 	assert.Equal(t, "model-x", models[0].ID)
 	assert.Equal(t, "handler-provider", models[0].Provider)
 
 	// Test invalid request body
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer([]byte(`invalid json`)))
-	req.Header.Set("Content-Type", "application/json")
-	rr = httptest.NewRecorder()
+	rec = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer([]byte(`invalid json`)))
+	c.Request.Header.Set("Content-Type", "application/json")
 
-	h.DiscoverModelsHandler(rr, req)
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-	assert.Contains(t, rr.Body.String(), "Invalid request body")
+	h.DiscoverModelsHandler(c)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Invalid request body")
 
 	// Mock server for unauthorized response (401)
 	unauthorizedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -121,23 +125,25 @@ func TestDiscoverModelsHandler(t *testing.T) {
 
 	// Test unauthorized error from handler
 	reqBody = []byte(fmt.Sprintf(`{"api_key": "bad-handler-key", "endpoint": "%s", "provider": "handler-provider"}`, unauthorizedServer.URL))
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	rr = httptest.NewRecorder()
+	rec = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer(reqBody))
+	c.Request.Header.Set("Content-Type", "application/json")
 
-	h.DiscoverModelsHandler(rr, req)
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	assert.Contains(t, rr.Body.String(), "Unauthorized: Invalid API Key")
+	h.DiscoverModelsHandler(c)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Unauthorized: Invalid API Key")
 
 	// Test invalid endpoint from handler
 	reqBody = []byte(`{"api_key": "handler-key", "endpoint": "", "provider": "handler-provider"}`)
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	rr = httptest.NewRecorder()
+	rec = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer(reqBody))
+	c.Request.Header.Set("Content-Type", "application/json")
 
-	h.DiscoverModelsHandler(rr, req)
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-	assert.Contains(t, rr.Body.String(), "endpoint URL cannot be empty")
+	h.DiscoverModelsHandler(c)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "endpoint URL cannot be empty")
 
 	// Test server error from handler (500)
 	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -147,13 +153,14 @@ func TestDiscoverModelsHandler(t *testing.T) {
 	defer errorServer.Close()
 
 	reqBody = []byte(fmt.Sprintf(`{"api_key": "handler-key", "endpoint": "%s", "provider": "handler-provider"}`, errorServer.URL))
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	rr = httptest.NewRecorder()
+	rec = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer(reqBody))
+	c.Request.Header.Set("Content-Type", "application/json")
 
-	h.DiscoverModelsHandler(rr, req)
-	assert.Equal(t, http.StatusInternalServerError, rr.Code)
-	assert.Contains(t, rr.Body.String(), "Failed to discover models")
+	h.DiscoverModelsHandler(c)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Failed to discover models")
 
 	// Test invalid JSON response from handler
 	invalidJsonServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -164,12 +171,13 @@ func TestDiscoverModelsHandler(t *testing.T) {
 	defer invalidJsonServer.Close()
 
 	reqBody = []byte(fmt.Sprintf(`{"api_key": "test-key", "endpoint": "%s", "provider": "test-provider"}`, invalidJsonServer.URL))
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	rr = httptest.NewRecorder()
+	rec = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/models/discover", bytes.NewBuffer(reqBody))
+	c.Request.Header.Set("Content-Type", "application/json")
 
-	h.DiscoverModelsHandler(rr, req)
-	assert.Equal(t, http.StatusBadGateway, rr.Code)
-	assert.Contains(t, rr.Body.String(), "Invalid API response from endpoint")
+	h.DiscoverModelsHandler(c)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Invalid API response from endpoint")
 
 }

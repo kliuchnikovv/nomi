@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
@@ -55,16 +56,16 @@ func DiscoverModels(apiKey, endpoint, provider string) ([]Model, error) {
 }
 
 // DiscoverModelsHandler handles the model discovery API request.
-func (h *ModelsHandler) DiscoverModelsHandler(w http.ResponseWriter, r *http.Request) {
+func (h *ModelsHandler) DiscoverModelsHandler(c *gin.Context) {
 	var requestBody struct {
 		APIKey   string `json:"api_key"`
 		Endpoint string `json:"endpoint"`
 		Provider string `json:"provider"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+	if err := c.ShouldBindJSON(&requestBody); err != nil {
 		h.Logger.Error("Failed to decode request body", zap.Error(err))
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
@@ -75,22 +76,18 @@ func (h *ModelsHandler) DiscoverModelsHandler(w http.ResponseWriter, r *http.Req
 		errStr := err.Error()
 		switch {
 		case strings.Contains(errStr, "endpoint URL cannot be empty"):
-			http.Error(w, errStr, http.StatusBadRequest)
+			c.JSON(http.StatusBadRequest, gin.H{"error": errStr})
 		case strings.Contains(errStr, "API request failed with status 401"):
-			http.Error(w, "Unauthorized: Invalid API Key", http.StatusUnauthorized)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: Invalid API Key"})
 		case strings.Contains(errStr, "failed to make HTTP request"):
-			http.Error(w, errStr, http.StatusBadRequest)
+			c.JSON(http.StatusBadRequest, gin.H{"error": errStr})
 		case strings.Contains(errStr, "failed to decode OpenAI compatible response"):
-			http.Error(w, "Invalid API response from endpoint", http.StatusBadGateway)
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Invalid API response from endpoint"})
 		default:
-			http.Error(w, "Failed to discover models", http.StatusInternalServerError)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to discover models"})
 		}
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(models); err != nil {
-		h.Logger.Error("Failed to encode models response", zap.Error(err))
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
+	c.JSON(http.StatusOK, models)
 }
