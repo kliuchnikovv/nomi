@@ -57,6 +57,12 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Heartbeat{},
 		&GitHubAppInstallation{},
 		&AgentTask{},
+		// AgentTaskEvent carries a composite uniqueIndex on (task_id, seq)
+		// (idx_agent_task_events_task_seq) so event appends are idempotent.
+		// AutoMigrate creates it from the struct tags on a fresh column set, but
+		// it will NOT convert a pre-existing plain (non-unique) index — if an
+		// older deploy already had one, drop it once by hand so AutoMigrate can
+		// recreate it unique.
 		&AgentTaskEvent{},
 		&UserAPIKey{},
 	); err != nil {

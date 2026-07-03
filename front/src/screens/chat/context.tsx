@@ -407,19 +407,51 @@ export function ChatProvider({
                 const mine = all.filter(t => t.chat_id === chatId);
                 for (const t of mine) {
                     let approvalRequestId: string | undefined;
+                    let clarifyEvent:
+                        | {
+                              kind: 'clarify_request';
+                              payload: {
+                                  request_id: string;
+                                  question: string;
+                                  options: string[];
+                              };
+                          }
+                        | undefined;
                     if (t.status === 'waiting_input') {
                         try {
                             const detail = await tasksApi.get(t.id);
                             if (isCancelled()) return;
-                            const req = (detail?.events ?? [])
+                            const events = detail?.events ?? [];
+                            const req = events
                                 .filter(e => e.kind === 'approval_request')
                                 .pop();
                             approvalRequestId = req?.payload?.request_id;
+                            const clarify = events
+                                .filter(e => e.kind === 'clarify_request')
+                                .pop();
+                            if (clarify?.payload?.request_id) {
+                                clarifyEvent = {
+                                    kind: 'clarify_request',
+                                    payload: {
+                                        request_id: clarify.payload.request_id,
+                                        question:
+                                            clarify.payload.question ?? '',
+                                        options: Array.isArray(
+                                            clarify.payload.options,
+                                        )
+                                            ? clarify.payload.options
+                                            : [],
+                                    },
+                                };
+                            }
                         } catch {
-                            // Fall through without approval controls.
+                            // Fall through without approval/clarify controls.
                         }
                     }
                     if (isCancelled()) return;
+                    // upsertTaskProgress consumes a single `event` per call, so
+                    // seed the base card (with any approval) first, then a follow-up
+                    // upsert to recover a pending clarify question.
                     useChatStore.getState().upsertTaskProgress(chatId, {
                         task_id: t.id,
                         goal: t.goal,
@@ -439,6 +471,13 @@ export function ChatProvider({
                               }
                             : {}),
                     });
+                    if (clarifyEvent) {
+                        useChatStore.getState().upsertTaskProgress(chatId, {
+                            task_id: t.id,
+                            status: t.status,
+                            event: clarifyEvent,
+                        });
+                    }
                 }
             } catch {
                 // Non-fatal: cards will still appear from live frames.

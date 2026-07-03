@@ -142,6 +142,9 @@ func New(
 	r.GET("/api/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
 	// Internal: Python workers connect here to deliver response frames directly (bypasses Redis)
 	r.GET("/internal/worker", workerHandler.WorkerWS)
+	// Internal: reconcile worker fetches unfinished tasks to re-adopt after a
+	// crash/restart. Guarded by the same X-Worker-Token check as /internal/worker.
+	r.GET("/internal/tasks/unfinished", agentTasksHandler.ReconcileUnfinished)
 	// Client tool result (round-trip proxy: device executes tool and sends result back)
 	r.POST("/api/chat/client-tool-result", wrapWithAuth(streamHandler.ClientToolResult, authMiddleware))
 
@@ -217,6 +220,7 @@ func New(
 	r.GET("/api/tasks/:id", wrapWithAuth(agentTasksHandler.Get, authMiddleware))
 	r.POST("/api/tasks/:id/steer", wrapWithAuth(agentTasksHandler.Steer, authMiddleware))
 	r.POST("/api/tasks/:id/approve", wrapWithAuth(agentTasksHandler.Approve, authMiddleware))
+	r.POST("/api/tasks/:id/clarify", wrapWithAuth(agentTasksHandler.Clarify, authMiddleware))
 	r.POST("/api/tasks/:id/stop", wrapWithAuth(agentTasksHandler.Stop, authMiddleware))
 
 	// Device token registration

@@ -50,7 +50,11 @@ type eventEnvelope struct {
 	Plan       *json.RawMessage `json:"plan"`       // present only when the plan changes
 	Result     *string          `json:"result"`     // present on completion
 	Finished   bool             `json:"finished"`   // true on done/failed/cancelled
-	Event      *struct {
+	// Recovery cursor. Pointers so an absent field leaves the column untouched.
+	CurrentStep     *int             `json:"current_step"`
+	Attempt         *int             `json:"attempt"`
+	PendingApproval *json.RawMessage `json:"pending_approval"` // {"request_id","step_id"} while waiting_input
+	Event           *struct {
 		Seq     int             `json:"seq"`
 		Kind    string          `json:"kind"`
 		Payload json.RawMessage `json:"payload"`
@@ -137,6 +141,21 @@ func (l *Listener) persistTask(ctx context.Context, taskID uuid.UUID, e *eventEn
 	if e.Result != nil {
 		updates["result"] = *e.Result
 	}
+	if e.CurrentStep != nil {
+		updates["current_step"] = *e.CurrentStep
+	}
+	if e.Attempt != nil {
+		updates["attempt"] = *e.Attempt
+	}
+	if e.PendingApproval != nil {
+		updates["pending_approval"] = datatypes.JSON(*e.PendingApproval)
+	}
+	// The pending_approval gate only exists while the task is blocked on input.
+	// As soon as it moves to any other status, clear it (NULL) so a stale gate
+	// never lingers — this clear wins over any pending_approval in this message.
+	if e.Status != "" && e.Status != "waiting_input" {
+		updates["pending_approval"] = gorm.Expr("NULL")
+	}
 	if e.Finished {
 		now := time.Now()
 		updates["finished_at"] = now
@@ -183,6 +202,15 @@ func (l *Listener) createTask(ctx context.Context, taskID uuid.UUID, e *eventEnv
 	}
 	if e.Result != nil {
 		task.Result = *e.Result
+	}
+	if e.CurrentStep != nil {
+		task.CurrentStep = *e.CurrentStep
+	}
+	if e.Attempt != nil {
+		task.Attempt = *e.Attempt
+	}
+	if e.PendingApproval != nil {
+		task.PendingApproval = datatypes.JSON(*e.PendingApproval)
 	}
 	return l.store.CreateAgentTask(ctx, task)
 }

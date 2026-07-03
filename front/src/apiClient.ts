@@ -489,6 +489,11 @@ export const tasksApi = {
             request_id: requestId,
             approved,
         }),
+    answerClarify: (id: string, requestId: string, answer: string) =>
+        apiClient.post<void>(`${API_URL()}/tasks/${id}/clarify`, {
+            request_id: requestId,
+            answer,
+        }),
     stop: (id: string) =>
         apiClient.post<void>(`${API_URL()}/tasks/${id}/stop`, {}),
 };

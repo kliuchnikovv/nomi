@@ -148,6 +148,8 @@ def _setup_all_mocks():
     _install_mock_module("agno.db.postgres.async_postgres")
     _install_mock_module("agno.knowledge", {"Knowledge": MagicMock})
     _install_mock_module("agno.knowledge.document", {"Document": MagicMock})
+    _install_mock_module("agno.knowledge.embedder")
+    _install_mock_module("agno.knowledge.embedder.google", {"GeminiEmbedder": MagicMock})
     _install_mock_module("agno.models", {"__path__": []})
     _install_mock_module("agno.models.base", {"Model": _StubModel})
     _install_mock_module("agno.models.message", {"Message": _StubMessage})
@@ -161,12 +163,16 @@ def _setup_all_mocks():
     _install_mock_module("agno.memory.manager", {"MemoryManager": MagicMock})
     _install_mock_module("agno.learn", {
         "EntityMemoryConfig": MagicMock,
+        "LearnedKnowledgeConfig": MagicMock,
         "LearningMachine": MagicMock,
         "LearningMode": MagicMock,
+        "SessionContextConfig": MagicMock,
         "UserProfileConfig": MagicMock,
     })
     _install_mock_module("agno.db.schemas")
     _install_mock_module("agno.db.schemas.memory", {"UserMemory": MagicMock})
+    _install_mock_module("agno.session")
+    _install_mock_module("agno.session.summary", {"SessionSummaryManager": MagicMock})
     _install_mock_module("agno.utils")
     _install_mock_module("agno.utils.log", {"logger": MagicMock()})
 

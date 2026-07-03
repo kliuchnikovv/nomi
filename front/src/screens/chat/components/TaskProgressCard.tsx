@@ -23,6 +23,7 @@ export type TaskProgressMeta = {
     result?: string;
     agent?: string;
     approvalRequestId?: string;
+    clarify?: { requestId: string; question: string; options: string[] };
 };
 
 const ACTIVE: AgentTaskStatus[] = [
@@ -54,6 +55,7 @@ export const TaskProgressCard: React.FC<{ task: TaskProgressMeta }> = ({
     const { theme } = useTheme();
     const [busy, setBusy] = useState(false);
     const [steerText, setSteerText] = useState('');
+    const [clarifyText, setClarifyText] = useState('');
 
     const status = (task.status ?? 'running') as AgentTaskStatus;
     const plan = task.plan ?? [];
@@ -78,6 +80,15 @@ export const TaskProgressCard: React.FC<{ task: TaskProgressMeta }> = ({
         if (!reqId) return;
         run(() => tasksApi.approve(task.task_id, reqId, approved));
     };
+    const onClarify = (answer: string) => {
+        const reqId = task.clarify?.requestId;
+        const trimmed = answer.trim();
+        if (!reqId || !trimmed) return;
+        run(async () => {
+            await tasksApi.answerClarify(task.task_id, reqId, trimmed);
+            setClarifyText('');
+        });
+    };
     const onStop = () => run(() => tasksApi.stop(task.task_id));
     const onSteer = () => {
         const msg = steerText.trim();
@@ -90,6 +101,7 @@ export const TaskProgressCard: React.FC<{ task: TaskProgressMeta }> = ({
 
     const showApproval =
         active && status === 'waiting_input' && !!task.approvalRequestId;
+    const showClarify = active && status === 'waiting_input' && !!task.clarify;
 
     return (
         <View
@@ -217,6 +229,74 @@ export const TaskProgressCard: React.FC<{ task: TaskProgressMeta }> = ({
                 </View>
             )}
 
+            {/* Clarify gate: a mid-task question the agent needs answered */}
+            {showClarify && task.clarify && (
+                <View style={[styles.clarify, { borderColor: theme.accent }]}>
+                    <Text
+                        style={[
+                            styles.clarifyTitle,
+                            { color: theme.textPrimary },
+                        ]}
+                    >
+                        {task.clarify.question || 'The agent has a question.'}
+                    </Text>
+                    {task.clarify.options.length > 0 && (
+                        <View style={styles.optionsRow}>
+                            {task.clarify.options.map(option => (
+                                <TouchableOpacity
+                                    key={option}
+                                    disabled={busy}
+                                    onPress={() => onClarify(option)}
+                                    style={[
+                                        styles.optionBtn,
+                                        { borderColor: theme.border },
+                                    ]}
+                                >
+                                    <Text style={{ color: theme.textPrimary }}>
+                                        {option}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
+                    <View style={styles.controls}>
+                        <TextInput
+                            style={[
+                                styles.steerInput,
+                                {
+                                    backgroundColor: theme.background,
+                                    color: theme.textPrimary,
+                                    borderColor: theme.border,
+                                },
+                            ]}
+                            placeholder="Type an answer…"
+                            placeholderTextColor={theme.textSecondary}
+                            value={clarifyText}
+                            onChangeText={setClarifyText}
+                            editable={!busy}
+                            onSubmitEditing={() => onClarify(clarifyText)}
+                            returnKeyType="send"
+                        />
+                        <TouchableOpacity
+                            onPress={() => onClarify(clarifyText)}
+                            disabled={busy || !clarifyText.trim()}
+                            style={[
+                                styles.iconBtn,
+                                {
+                                    backgroundColor: clarifyText.trim()
+                                        ? theme.accent
+                                        : theme.border,
+                                },
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Send answer"
+                        >
+                            <Ionicons name="arrow-up" size={16} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
             {/* Final result */}
             {!active && task.result ? (
                 <Text style={[styles.result, { color: theme.textPrimary }]}>
@@ -317,6 +397,20 @@ const styles = StyleSheet.create({
     approvalTitle: { fontSize: 14, fontWeight: '600' },
     approvalBody: { fontSize: 13 },
     actionsRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+    clarify: {
+        borderWidth: 1,
+        borderRadius: 10,
+        padding: 10,
+        gap: 8,
+    },
+    clarifyTitle: { fontSize: 14, fontWeight: '600' },
+    optionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    optionBtn: {
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
     btn: {
         paddingVertical: 8,
         paddingHorizontal: 16,

@@ -208,7 +208,7 @@ export type AgentTaskEvent = {
     id: string;
     task_id: string;
     seq: number;
-    // 'plan_update' | 'step_started' | 'step_done' | 'log' | 'approval_request' | 'error' | 'done'
+    // 'plan_update' | 'step_started' | 'step_done' | 'log' | 'approval_request' | 'clarify_request' | 'error' | 'done'
     kind: string;
     payload: any;
     created_at: string;

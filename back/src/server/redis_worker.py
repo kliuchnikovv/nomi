@@ -273,6 +273,17 @@ class RedisWorker:
         payload["task_id"] = task_id
         payload.setdefault("chat_id", chat_id)
         logger.info("[RedisWorker] TASK_START %s (chat %s)", task_id, chat_id)
+        self._launch_task_run(task_id, payload)
+
+    def _launch_task_run(self, task_id: str, payload: dict) -> None:
+        """Spawn a detached build_and_run coroutine and register it by task_id.
+
+        Shared by the TASK_START path and the boot reconciler. Skips if a run
+        for this task_id is already active (guards against a duplicate relaunch).
+        """
+        if task_id in self.active_task_runs:
+            logger.info("[RedisWorker] Task run %s already active, skipping", task_id)
+            return
 
         from src.server.task_runner import build_and_run
 
@@ -300,6 +311,69 @@ class RedisWorker:
         # Detached: do NOT await — the run outlives this request handler.
         current_task = asyncio.create_task(task_wrapped())
         self.active_task_runs[task_id] = current_task
+
+    async def reconcile_unfinished_tasks(self) -> None:
+        """On boot, relaunch tasks left unfinished by a prior worker/process.
+
+        Pulls the unfinished set from the Go API (single DB owner) and resumes
+        each from its persisted step cursor instead of re-planning. A task a live
+        worker is actively progressing is filtered out server-side by staleness,
+        and _launch_task_run additionally skips any task_id already active here.
+        """
+        import httpx
+
+        go_url = os.getenv("GO_API_URL", "http://localhost:8080").rstrip("/")
+        token = os.getenv("WORKER_TOKEN", "")
+        headers = {"X-Worker-Token": token} if token else {}
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{go_url}/internal/tasks/unfinished", headers=headers
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[RedisWorker] reconcile fetch failed: %s", exc)
+            return
+
+        tasks = data.get("tasks") if isinstance(data, dict) else None
+        relaunched = 0
+        for t in tasks or []:
+            tid = str(t.get("task_id") or "")
+            if not tid or tid in self.active_task_runs:
+                continue
+            try:
+                self._relaunch_task_run(t)
+                relaunched += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "[RedisWorker] failed to relaunch task %s: %s", tid, exc
+                )
+        if relaunched:
+            logger.info(
+                "[RedisWorker] reconciled %d unfinished task(s)", relaunched
+            )
+
+    def _relaunch_task_run(self, task: dict) -> None:
+        """Build a resume payload from a reconcile row and launch it."""
+        task_id = str(task.get("task_id") or "")
+        payload = {
+            "task_id": task_id,
+            "user_id": task.get("user_id") or "",
+            "chat_id": task.get("chat_id") or task_id,
+            "goal": task.get("goal") or "",
+            "agent_type": "nomi",
+            "resume_state": {
+                "plan": task.get("plan") or [],
+                "current_step": task.get("current_step") or 0,
+                "attempt": task.get("attempt") or 0,
+                "pending_approval": task.get("pending_approval"),
+                "last_seq": task.get("last_seq") or 0,
+                "guidance": task.get("guidance") or [],
+                "status": task.get("status"),
+            },
+        }
+        self._launch_task_run(task_id, payload)
 
     async def _process_request(self, chat_id: str, raw_data: str):
         """Process the request logic."""

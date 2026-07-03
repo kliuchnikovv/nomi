@@ -180,19 +180,28 @@ type AgentTask struct {
 	// Plan is a JSON array of steps: [{"id","title","status","result"}].
 	Plan datatypes.JSON `gorm:"type:jsonb" json:"plan"`
 	// Result is the final summary once the task is done/failed.
-	Result     string     `gorm:"type:text;not null;default:''" json:"result"`
-	CreatedAt  time.Time  `gorm:"not null" json:"created_at"`
-	UpdatedAt  time.Time  `gorm:"not null" json:"updated_at"`
-	FinishedAt *time.Time `gorm:"default:null" json:"finished_at"`
+	Result string `gorm:"type:text;not null;default:''" json:"result"`
+	// CurrentStep is the index of the step the runner is (or was) working on.
+	// Used to resume a task after a crash/restart (recovery).
+	CurrentStep int `gorm:"not null;default:0" json:"current_step"`
+	// Attempt counts how many times the current step has been retried.
+	Attempt int `gorm:"not null;default:0" json:"attempt"`
+	// PendingApproval holds {"request_id","step_id"} while the task sits in
+	// 'waiting_input' awaiting a user decision; NULL/cleared otherwise.
+	PendingApproval datatypes.JSON `gorm:"type:jsonb" json:"pending_approval,omitempty"`
+	CreatedAt       time.Time      `gorm:"not null" json:"created_at"`
+	UpdatedAt       time.Time      `gorm:"not null" json:"updated_at"`
+	FinishedAt      *time.Time     `gorm:"default:null" json:"finished_at"`
 }
 
 // AgentTaskEvent is an append-only progress entry for an AgentTask. The runner
 // writes these as it works so the client can replay the activity log.
 type AgentTaskEvent struct {
 	ID     uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	TaskID uuid.UUID `gorm:"type:uuid;not null;index:idx_agent_task_events_task_seq,priority:1" json:"task_id"`
-	// Seq orders events within a task (monotonic per task).
-	Seq int `gorm:"not null;index:idx_agent_task_events_task_seq,priority:2" json:"seq"`
+	TaskID uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_agent_task_events_task_seq,priority:1" json:"task_id"`
+	// Seq orders events within a task (monotonic per task). (task_id, seq) is
+	// unique so appends are idempotent (a re-published event is a no-op).
+	Seq int `gorm:"not null;uniqueIndex:idx_agent_task_events_task_seq,priority:2" json:"seq"`
 	// Kind: 'plan_update' | 'step_started' | 'step_done' | 'log' | 'approval_request' | 'error' | 'done'.
 	Kind      string         `gorm:"type:text;not null" json:"kind"`
 	Payload   datatypes.JSON `gorm:"type:jsonb" json:"payload"`

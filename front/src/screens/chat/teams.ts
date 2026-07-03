@@ -9,6 +9,10 @@ export interface TeamDetails {
         name?: string;
         participants?: any[];
         model?: string; // Optional override
+        // Target GitHub repo for dev-mode teams (e.g. `development_team`).
+        // Lets the UI point the team at a specific repo/branch.
+        // TODO: wire an input UI to populate this for developer mode.
+        repo?: { owner: string; repo: string; ref?: string };
     };
 }
 

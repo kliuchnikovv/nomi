@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import os
@@ -182,6 +183,9 @@ async def lifespan(app: FastAPI):
         redis_worker = container.redis_worker
         await redis_worker.start()
         logging.warning("[Lifespan] Redis Worker started successfully")
+        # Relaunch tasks left unfinished by a prior worker/process (fire-and-
+        # forget so an unreachable Go API can't wedge boot).
+        asyncio.create_task(redis_worker.reconcile_unfinished_tasks())
     except Exception as e:
         logging.error("[Lifespan] Failed to start Redis Worker: %s", e, exc_info=True)
 

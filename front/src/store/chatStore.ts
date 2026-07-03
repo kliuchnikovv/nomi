@@ -387,6 +387,24 @@ export const useChatStore = create<ChatStore>()(
                         approvalRequestId = undefined;
                     }
 
+                    // Track a pending mid-task clarify question the same way:
+                    // set it when a clarify_request event arrives, clear it once
+                    // the task moves out of waiting_input.
+                    let clarify = prevMeta.clarify;
+                    if (payload.event?.kind === 'clarify_request') {
+                        const ep = payload.event.payload ?? {};
+                        clarify = {
+                            requestId: ep.request_id,
+                            question: ep.question ?? '',
+                            options: Array.isArray(ep.options)
+                                ? ep.options
+                                : [],
+                        };
+                    }
+                    if (status && status !== 'waiting_input') {
+                        clarify = undefined;
+                    }
+
                     // Intermediate frames (e.g. a log event) omit plan/result —
                     // preserve the last known values.
                     const metadata = {
@@ -401,6 +419,7 @@ export const useChatStore = create<ChatStore>()(
                         result: payload.result ?? prevMeta.result,
                         agent: payload.agent ?? prevMeta.agent,
                         approvalRequestId,
+                        clarify,
                     };
 
                     if (idx !== -1) {

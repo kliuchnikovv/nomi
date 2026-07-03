@@ -51,6 +51,8 @@ function eventLine(e: AgentTaskEvent): string {
             return p.message ?? '';
         case 'approval_request':
             return `Approval requested: ${p.title ?? ''}`;
+        case 'clarify_request':
+            return `Question: ${p.question ?? ''}`;
         case 'error':
             return `Error: ${p.error ?? p.reason ?? 'unknown'}`;
         default:

@@ -812,18 +812,36 @@ class AgentFactory:
 
                 # delegate_to(background=True) hands substantial multi-step work to
                 # the autonomous task runner. Only the lead assistant may spawn
-                # background tasks — exclude planner/team and any team command, and
-                # never inside a task run (task_spawner is already None there; see
-                # RedisSession gating). NOTE: the lead assistant's agent_type is
-                # "nomi" OR "agent" (the mobile app sends "agent"); both build a
-                # NomiAgent, so we must not require it to be literally "nomi".
+                # background tasks — exclude planner/team and any team command
+                # EXCEPT development_team (dev mode routes coding work to a
+                # background coding task), and never inside a task run
+                # (task_spawner is already None there; see RedisSession gating).
+                # NOTE: the lead assistant's agent_type is "nomi" OR "agent" (the
+                # mobile app sends "agent"); both build a NomiAgent, so we must not
+                # require it to be literally "nomi".
+                cmd_type = (command_desc or {}).get("type")
+                is_dev_team = cmd_type == "development_team"
                 agent_type_l = (agent_type or "nomi").lower()
                 allow_background = (
                     task_spawner is not None
                     and agent_type_l not in ("planner", "team")
-                    and not (command_desc and command_desc.get("type"))
+                    and (is_dev_team or not cmd_type)
                 )
-                spawner_for_delegation = task_spawner if allow_background else None
+                if allow_background and is_dev_team:
+                    # Every background spawn from developer mode is a coding task,
+                    # targeting the repo named on the command (may be None → the
+                    # runner asks the user which repo). delegate_to still calls the
+                    # spawner with a single positional arg, so bind the extras here.
+                    _repo = (command_desc or {}).get("repo")
+
+                    def _dev_spawner(goal: str, _s=task_spawner, _r=_repo):
+                        return _s(goal, task_kind="coding", repo=_r)
+
+                    spawner_for_delegation = _dev_spawner
+                elif allow_background:
+                    spawner_for_delegation = task_spawner
+                else:
+                    spawner_for_delegation = None
 
                 # Drop the raw sandbox toolkit from Nomi's own tools — it now reaches
                 # the sandbox only by delegating to the engineer.

@@ -391,12 +391,17 @@ class RedisSession:
         self.next_id = frame.id + 1
         return self.next_id
 
-    async def _spawn_background_task(self, goal: str) -> str:
+    async def _spawn_background_task(
+        self, goal: str, *, task_kind: str = "generic", repo: dict | None = None
+    ) -> str:
         """Launch an autonomous background task and return its id immediately.
 
         Backs the start_background_task tool. Publishes a TASK_START frame onto
         chat:request:{chat_id}; the worker picks it up and runs it detached from
         this turn (see RedisWorker._start_task_run).
+
+        ``task_kind="coding"`` (set by developer mode) triggers the plan ->
+        clarify -> approval flow in TaskRunner; ``repo`` names the target repo.
         """
         from src.server.models import Op
         from src.server.utils import make_signal
@@ -409,7 +414,10 @@ class RedisSession:
             "task_id": task_id,
             "model": self.current_model_name,
             "agent_type": "nomi",
+            "task_kind": task_kind,
         }
+        if repo:
+            payload["repo"] = repo
         frame = make_signal(0, Op.TASK_START, self.chat_id, payload)
         if self.redis_client:
             await self.redis_client.publish(

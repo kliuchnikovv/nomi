@@ -244,7 +244,10 @@ func (h *StreamHandler) enrichCommandWithIntegrations(userID uuid.UUID, command 
 		}
 	}
 
-	// Re-serialize command
+	// Re-serialize command. cmdData is the full incoming command blob mutated in
+	// place, so any fields we don't touch — notably the optional "repo"
+	// ({"owner","repo","ref"}) used by the coding flow — pass through untouched.
+	// Do NOT rebuild this from a fresh map or the passthrough fields get stripped.
 	enriched, err := json.Marshal(cmdData)
 	if err != nil {
 		h.logger.Error("failed to marshal enriched command", zap.Error(err))
