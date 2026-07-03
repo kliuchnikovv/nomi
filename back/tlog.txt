@@ -1,0 +1,608 @@
+FFFF.FFFFFFFFFFFFFF..................FFF................................ [ 13%]
+........................................................................ [ 27%]
+........FF.............................................................. [ 41%]
+........................................................................ [ 54%]
+...........................FFFFF........................................ [ 68%]
+..........................................FFFFFFFFF.FFFF............FFFF [ 82%]
+FFFF............F............FFFFFFFFFFFF............FFFFFFFF........FFF [ 96%]
+FFFFFFF.FFFFF.FF.....                                                    [100%]
+=================================== FAILURES ===================================
+E   AttributeError: module 'src.agents' has no attribute 'factory'
+
+The above exception was the direct cause of the following exception:
+E   AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+/usr/local/lib/python3.13/dist-packages/_pytest/monkeypatch.py:97: AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+E   AttributeError: module 'src.agents' has no attribute 'factory'
+
+The above exception was the direct cause of the following exception:
+E   AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+/usr/local/lib/python3.13/dist-packages/_pytest/monkeypatch.py:97: AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+E   AttributeError: module 'src.agents' has no attribute 'factory'
+
+The above exception was the direct cause of the following exception:
+E   AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+/usr/local/lib/python3.13/dist-packages/_pytest/monkeypatch.py:97: AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+E   AttributeError: module 'src.agents' has no attribute 'factory'
+
+The above exception was the direct cause of the following exception:
+E   AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+/usr/local/lib/python3.13/dist-packages/_pytest/monkeypatch.py:97: AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+E   AttributeError: module 'src.agents' has no attribute 'factory'
+
+The above exception was the direct cause of the following exception:
+E   AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+/usr/local/lib/python3.13/dist-packages/_pytest/monkeypatch.py:97: AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+E   AttributeError: module 'src.agents' has no attribute 'factory'
+
+The above exception was the direct cause of the following exception:
+E   AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+/usr/local/lib/python3.13/dist-packages/_pytest/monkeypatch.py:97: AttributeError: 'module' object at src.agents.factory has no attribute 'factory'
+E   AssertionError: NomiAgent should be a real type, got <class 'unittest.mock.MagicMock'>
+    assert False
+     +  where False = isinstance(<MagicMock name='mock.NomiAgent' id='140641242455680'>, type)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:13: AssertionError: NomiAgent should be a real type, got <class 'unittest.mock.MagicMock'>
+E   TypeError: object.__new__(X): X is not a type object (MagicMock)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:20: TypeError: object.__new__(X): X is not a type object (MagicMock)
+E   TypeError: object.__new__(X): X is not a type object (MagicMock)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:20: TypeError: object.__new__(X): X is not a type object (MagicMock)
+E   TypeError: object.__new__(X): X is not a type object (MagicMock)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:20: TypeError: object.__new__(X): X is not a type object (MagicMock)
+E   TypeError: object.__new__(X): X is not a type object (MagicMock)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:20: TypeError: object.__new__(X): X is not a type object (MagicMock)
+E   TypeError: object.__new__(X): X is not a type object (MagicMock)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:20: TypeError: object.__new__(X): X is not a type object (MagicMock)
+E   TypeError: object.__new__(X): X is not a type object (MagicMock)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:20: TypeError: object.__new__(X): X is not a type object (MagicMock)
+E   TypeError: object.__new__(X): X is not a type object (MagicMock)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:115: TypeError: object.__new__(X): X is not a type object (MagicMock)
+E   TypeError: object.__new__(X): X is not a type object (MagicMock)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:20: TypeError: object.__new__(X): X is not a type object (MagicMock)
+E   AssertionError: assert <MagicMock name='mock.NomiAgent._normalize_memory_text()' id='140641191120240'> == 'user likes vienna'
+     +  where <MagicMock name='mock.NomiAgent._normalize_memory_text()' id='140641191120240'> = <MagicMock name='mock.NomiAgent._normalize_memory_text' id='140641191130992'>((<MagicMock name='mock.STALE_PREFIX' id='140641191123936'> + 'User likes Vienna'))
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:142: AssertionError: assert <MagicMock name='mock.NomiAgent._normalize_memory_text()' id='140641191120240'> == 'user likes vienna'
+E   TypeError: object.__new__(X): X is not a type object (MagicMock)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:148: TypeError: object.__new__(X): X is not a type object (MagicMock)
+E   TypeError: object.__new__(X): X is not a type object (MagicMock)
+/workspace/genie-api/back/tests/agents/test_memory_decay.py:187: TypeError: object.__new__(X): X is not a type object (MagicMock)
+E   AssertionError: assert 'memory.note' in ['compact', 'forget', 'help', 'list', 'list.add', 'list.clear', ...]
+/workspace/genie-api/back/tests/commands/test_app_commands_endpoint.py:142: AssertionError: assert 'memory.note' in ['compact', 'forget', 'help', 'list', 'list.add', 'list.clear', ...]
+E   StopIteration
+/workspace/genie-api/back/tests/commands/test_app_commands_endpoint.py:167: StopIteration
+E   StopIteration
+/workspace/genie-api/back/tests/commands/test_app_commands_endpoint.py:195: StopIteration
+E   TypeError: '<=' not supported between instances of 'MagicMock' and 'int'
+------------------------------ Captured log call -------------------------------
+WARNING  src.models.safe_gemini:safe_gemini.py:39 [SafeGemini] retry 1 after error: 500 error
+/workspace/genie-api/back/src/models/safe_gemini.py:44: TypeError: '<=' not supported between instances of 'MagicMock' and 'int'
+E   TypeError: '<=' not supported between instances of 'MagicMock' and 'int'
+------------------------------ Captured log call -------------------------------
+WARNING  src.models.safe_gemini:safe_gemini.py:39 [SafeGemini] retry 1 after error: 500 error
+/workspace/genie-api/back/src/models/safe_gemini.py:44: TypeError: '<=' not supported between instances of 'MagicMock' and 'int'
+E   AttributeError: 'RedisSession' object has no attribute '_build_history_messages'
+/workspace/genie-api/back/tests/test_redis_session_history.py:49: AttributeError: 'RedisSession' object has no attribute '_build_history_messages'
+E   AttributeError: 'RedisSession' object has no attribute '_build_history_messages'
+/workspace/genie-api/back/tests/test_redis_session_history.py:66: AttributeError: 'RedisSession' object has no attribute '_build_history_messages'
+E   TypeError: object MagicMock can't be used in 'await' expression
+/workspace/genie-api/back/tests/test_redis_worker_fixes.py:25: TypeError: object MagicMock can't be used in 'await' expression
+E   TypeError: object MagicMock can't be used in 'await' expression
+/workspace/genie-api/back/tests/test_redis_worker_fixes.py:52: TypeError: object MagicMock can't be used in 'await' expression
+E   TypeError: a coroutine was expected, got <MagicMock name='mock.RedisWorker().start()' id='140641170204928'>
+/usr/lib/python3.13/asyncio/base_events.py:475: TypeError: a coroutine was expected, got <MagicMock name='mock.RedisWorker().start()' id='140641170204928'>
+E   AssertionError: assert 'error' == 'result'
+      
+      - result
+      + error
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:78: AssertionError: assert 'error' == 'result'
+E   AssertionError: assert 'error' == 'question'
+      
+      - question
+      + error
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:114: AssertionError: assert 'error' == 'question'
+E   AssertionError: assert 'error' == 'question'
+      
+      - question
+      + error
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:169: AssertionError: assert 'error' == 'question'
+E   AssertionError: assert 'error' == 'question'
+      
+      - question
+      + error
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:202: AssertionError: assert 'error' == 'question'
+E   assert 'play chess' in "Unknown tool: <MagicMock name='mock.RoutingDecision().tool' id='140641169756512'>"
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:227: assert 'play chess' in "Unknown tool: <MagicMock name='mock.RoutingDecision().tool' id='140641169756512'>"
+E   KeyError: 'tool'
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:273: KeyError: 'tool'
+E   AssertionError: assert 'error' == 'result'
+      
+      - result
+      + error
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:315: AssertionError: assert 'error' == 'result'
+E   AssertionError: assert 'error' == 'result'
+      
+      - result
+      + error
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:373: AssertionError: assert 'error' == 'result'
+E   AssertionError: assert 'error' == 'result'
+      
+      - result
+      + error
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:435: AssertionError: assert 'error' == 'result'
+E   AssertionError: assert 'error' == 'result'
+      
+      - result
+      + error
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:537: AssertionError: assert 'error' == 'result'
+E   AssertionError: assert 'error' == 'result'
+      
+      - result
+      + error
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:639: AssertionError: assert 'error' == 'result'
+E   AssertionError: assert 'error' == 'result'
+      
+      - result
+      + error
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:677: AssertionError: assert 'error' == 'result'
+E   KeyError: 'tool'
+------------------------------ Captured log call -------------------------------
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin calendar server tools: No module named 'plugins.calendar'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin github server tools: No module named 'plugins.github'; 'plugins' is not a package
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin gmail server tools: No module named 'plugins.gmail'; 'plugins' is not a package
+INFO     src.plugins.loader:loader.py:99 registered server plugin builder: sandbox
+WARNING  src.plugins.loader:loader.py:101 failed to load plugin telegram server tools: No module named 'plugins.telegram'; 'plugins' is not a package
+WARNING  src.tools.discovery:discovery.py:79 [Discovery] load_plugins raised; using manifests loaded so far
+Traceback (most recent call last):
+  File "/workspace/genie-api/back/src/tools/discovery.py", line 75, in _build_discovery_description
+    load_plugins()
+    ~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 144, in load_plugins
+    _register_delivery_handlers()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/workspace/genie-api/back/src/plugins/loader.py", line 106, in _register_delivery_handlers
+    from src.server.delivery import DeliveryRegistry
+ImportError: cannot import name 'DeliveryRegistry' from 'src.server.delivery' (unknown location)
+/workspace/genie-api/back/tests/tools/test_discovery.py:707: KeyError: 'tool'
+E   Failed: DID NOT RAISE ValueError
+/workspace/genie-api/back/tests/tools/test_executor.py:13: Failed: DID NOT RAISE ValueError
+E   AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == 'search results'
+/workspace/genie-api/back/tests/tools/test_executor.py:25: AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == 'search results'
+E   AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == 'Email sent'
+/workspace/genie-api/back/tests/tools/test_executor.py:42: AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == 'Email sent'
+E   Failed: DID NOT RAISE ValueError
+/workspace/genie-api/back/tests/tools/test_executor.py:54: Failed: DID NOT RAISE ValueError
+E   AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == ''
+/workspace/genie-api/back/tests/tools/test_executor.py:66: AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == ''
+E   AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == 'repo1, repo2'
+/workspace/genie-api/back/tests/tools/test_executor.py:79: AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == 'repo1, repo2'
+E   AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == 'async result'
+/workspace/genie-api/back/tests/tools/test_executor.py:98: AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == 'async result'
+E   AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == 'sync result'
+/workspace/genie-api/back/tests/tools/test_executor.py:115: AssertionError: assert <MagicMock name='mock.ServerToolExecutor().run()' id='140641168653824'> == 'sync result'
+E   AssertionError: assert 'daddr=55.755,37.617' in 'maps://?q=%D0%92%D0%BA%D1%83%D1%81%D0%92%D0%B8%D0%BB%D0%BB&sll=55.755,37.617&z=17'
+/workspace/genie-api/back/tests/tools/test_maps.py:161: AssertionError: assert 'daddr=55.755,37.617' in 'maps://?q=%D0%92%D0%BA%D1%83%D1%81%D0%92%D0%B8%D0%BB%D0%BB&sll=55.755,37.617&z=17'
+E   AttributeError: module 'src.tools' has no attribute 'registry'
+
+The above exception was the direct cause of the following exception:
+E   AttributeError: 'module' object at src.tools.registry has no attribute 'registry'
+/usr/local/lib/python3.13/dist-packages/_pytest/monkeypatch.py:97: AttributeError: 'module' object at src.tools.registry has no attribute 'registry'
+E   AttributeError: module 'src.tools' has no attribute 'registry'
+
+The above exception was the direct cause of the following exception:
+E   AttributeError: 'module' object at src.tools.registry has no attribute 'registry'
+/usr/local/lib/python3.13/dist-packages/_pytest/monkeypatch.py:97: AttributeError: 'module' object at src.tools.registry has no attribute 'registry'
+E   AttributeError: module 'src.tools' has no attribute 'registry'
+
+The above exception was the direct cause of the following exception:
+E   AttributeError: 'module' object at src.tools.registry has no attribute 'registry'
+/usr/local/lib/python3.13/dist-packages/_pytest/monkeypatch.py:97: AttributeError: 'module' object at src.tools.registry has no attribute 'registry'
+E   AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'execute'
+     +  where <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> = <MagicMock name='mock.ToolRouter().decide()' id='140641169767600'>.action
+/workspace/genie-api/back/tests/tools/test_router.py:64: AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'execute'
+E   AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'question'
+     +  where <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> = <MagicMock name='mock.ToolRouter().decide()' id='140641169767600'>.action
+/workspace/genie-api/back/tests/tools/test_router.py:85: AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'question'
+E   AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'none'
+     +  where <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> = <MagicMock name='mock.ToolRouter().decide()' id='140641169767600'>.action
+/workspace/genie-api/back/tests/tools/test_router.py:95: AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'none'
+E   KeyError: 'contents'
+/workspace/genie-api/back/tests/tools/test_router.py:115: KeyError: 'contents'
+E   AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'none'
+     +  where <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> = <MagicMock name='mock.ToolRouter().decide()' id='140641169767600'>.action
+/workspace/genie-api/back/tests/tools/test_router.py:122: AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'none'
+E   AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'execute'
+     +  where <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> = <MagicMock name='mock.ToolRouter().decide()' id='140641169767600'>.action
+/workspace/genie-api/back/tests/tools/test_router.py:137: AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'execute'
+E   AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'none'
+     +  where <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> = <MagicMock name='mock.ToolRouter().decide()' id='140641169767600'>.action
+/workspace/genie-api/back/tests/tools/test_router.py:149: AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'none'
+E   AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'none'
+     +  where <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> = <MagicMock name='mock.ToolRouter().decide()' id='140641169767600'>.action
+/workspace/genie-api/back/tests/tools/test_router.py:160: AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'none'
+E   AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'execute'
+     +  where <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> = <MagicMock name='mock.ToolRouter().decide()' id='140641169767600'>.action
+/workspace/genie-api/back/tests/tools/test_router.py:190: AssertionError: assert <MagicMock name='mock.ToolRouter().decide().action' id='140641169762560'> == 'execute'
+E   AssertionError: Expected '_run_extract_stage' to have been called once. Called 0 times.
+/usr/lib/python3.13/unittest/mock.py:958: AssertionError: Expected '_run_extract_stage' to have been called once. Called 0 times.
+E   AssertionError: assert <MagicMock na...641193967104'> == <MagicMock na...641123783008'>
+      
+      Use -v to get more diff
+/workspace/genie-api/back/tests/workflows/test_clarification.py:58: AssertionError: assert <MagicMock na...641193967104'> == <MagicMock na...641123783008'>
+E   AssertionError: Expected '_run_extract_stage' to have been called once. Called 0 times.
+/usr/lib/python3.13/unittest/mock.py:958: AssertionError: Expected '_run_extract_stage' to have been called once. Called 0 times.
+E   AssertionError: assert 'plan_patches' in {'status': <MagicMock name='mock.PlanStatus.BUILD' id='140641179409712'>, 'tasks': [{'id': 't1', 'title': 'Meeting', 'time_hint': '14:00', 'location': 'office', ...}], 'planning_date': '2026-04-05', 'timezone': 'UTC', ...}
+     +  where {'status': <MagicMock name='mock.PlanStatus.BUILD' id='140641179409712'>, 'tasks': [{'id': 't1', 'title': 'Meeting', 'time_hint': '14:00', 'location': 'office', ...}], 'planning_date': '2026-04-05', 'timezone': 'UTC', ...} = <conftest._StubWorkflow object at 0x7fe98b83cb00>.session_state
+/workspace/genie-api/back/tests/workflows/test_clarification.py:107: AssertionError: assert 'plan_patches' in {'status': <MagicMock name='mock.PlanStatus.BUILD' id='140641179409712'>, 'tasks': [{'id': 't1', 'title': 'Meeting', 'time_hint': '14:00', 'location': 'office', ...}], 'planning_date': '2026-04-05', 'timezone': 'UTC', ...}
+E   AssertionError: assert <MagicMock name='mock.PlanStatus.EXTRACT' id='140641193967104'> == 'extract'
+     +  where <MagicMock name='mock.PlanStatus.EXTRACT' id='140641193967104'> = PlanStatus.EXTRACT
+/workspace/genie-api/back/tests/workflows/test_models.py:5: AssertionError: assert <MagicMock name='mock.PlanStatus.EXTRACT' id='140641193967104'> == 'extract'
+E   AssertionError: assert <MagicMock na...641191127632'> == []
+      
+      Use -v to get more diff
+/workspace/genie-api/back/tests/workflows/test_models.py:17: AssertionError: assert <MagicMock na...641191127632'> == []
+E   AssertionError: assert <MagicMock name='mock.Cluster().coords' id='140641123788384'> is None
+     +  where <MagicMock name='mock.Cluster().coords' id='140641123788384'> = <MagicMock name='mock.Cluster()' id='140641123782672'>.coords
+/workspace/genie-api/back/tests/workflows/test_models.py:23: AssertionError: assert <MagicMock name='mock.Cluster().coords' id='140641123788384'> is None
+E   AssertionError: assert <MagicMock name='mock.TravelBlock().duration_min' id='140641123789056'> == 25
+     +  where <MagicMock name='mock.TravelBlock().duration_min' id='140641123789056'> = <MagicMock name='mock.TravelBlock()' id='140641123788720'>.duration_min
+/workspace/genie-api/back/tests/workflows/test_models.py:36: AssertionError: assert <MagicMock name='mock.TravelBlock().duration_min' id='140641123789056'> == 25
+E   TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union
+/workspace/genie-api/back/tests/workflows/test_stages.py:28: TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union
+E   AssertionError: assert <MagicMock na...641123793088'> == ['What time i...gym session?']
+      
+      Use -v to get more diff
+/workspace/genie-api/back/tests/workflows/test_stages.py:35: AssertionError: assert <MagicMock na...641123793088'> == ['What time i...gym session?']
+E   AssertionError: assert <MagicMock na...641123793088'> == []
+      
+      Use -v to get more diff
+/workspace/genie-api/back/tests/workflows/test_stages.py:46: AssertionError: assert <MagicMock na...641123793088'> == []
+E   TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union
+/workspace/genie-api/back/tests/workflows/test_stages.py:53: TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union
+E   AssertionError: assert 0 == 2
+     +  where 0 = <MagicMock name='geocode' id='140641123791072'>.call_count
+/workspace/genie-api/back/tests/workflows/test_stages.py:74: AssertionError: assert 0 == 2
+E   AssertionError: assert 0 == 1
+     +  where 0 = len(<MagicMock name='mock._run_recon_stage().pending_questions' id='140641189611904'>)
+     +    where <MagicMock name='mock._run_recon_stage().pending_questions' id='140641189611904'> = <MagicMock name='mock._run_recon_stage()' id='140641123788048'>.pending_questions
+/workspace/genie-api/back/tests/workflows/test_stages.py:86: AssertionError: assert 0 == 1
+E   AssertionError: assert <MagicMock name='mock._run_recon_stage().is_complete' id='140641045397920'> is True
+     +  where <MagicMock name='mock._run_recon_stage().is_complete' id='140641045397920'> = <MagicMock name='mock._run_recon_stage()' id='140641123788048'>.is_complete
+/workspace/genie-api/back/tests/workflows/test_stages.py:97: AssertionError: assert <MagicMock name='mock._run_recon_stage().is_complete' id='140641045397920'> is True
+E   AssertionError: assert 0 == 4
+     +  where 0 = len(<MagicMock name='mock._run_cluster_stage().output.__getitem__()' id='140641169754496'>)
+/workspace/genie-api/back/tests/workflows/test_stages.py:130: AssertionError: assert 0 == 4
+E   AssertionError: assert 0 == 4
+     +  where 0 = len(<MagicMock name='mock._run_cluster_stage().output.__getitem__()' id='140641169754496'>)
+     +  and   4 = len([{'id': 't1', 'time_hint': '09:00', 'location': 'home', 'context_type': 'home'}, {'id': 't2', 'time_hint': None, 'loca...tion': 'office', 'context_type': 'place'}, {'id': 't4', 'time_hint': None, 'location': 'home', 'context_type': 'home'}])
+/workspace/genie-api/back/tests/workflows/test_stages.py:137: AssertionError: assert 0 == 4
+E   AssertionError: assert 0 == 3
+     +  where 0 = len(<MagicMock name='mock._run_route_stage().output.__getitem__()' id='140641045397584'>)
+/workspace/genie-api/back/tests/workflows/test_stages.py:154: AssertionError: assert 0 == 3
+E   AssertionError: assert <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__()' id='140641045400272'> == 20
+/workspace/genie-api/back/tests/workflows/test_stages.py:176: AssertionError: assert <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__()' id='140641045400272'> == 20
+E   AssertionError: assert ('gym' in <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__().lower()' id='140641045401952'> or 'gym' in <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__()' id='140641045400272'>)
+     +  where <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__().lower()' id='140641045401952'> = <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__().lower' id='140641045401616'>()
+     +    where <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__().lower' id='140641045401616'> = <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__()' id='140641045400272'>.lower
+/workspace/genie-api/back/tests/workflows/test_stages.py:183: AssertionError: assert ('gym' in <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__().lower()' id='140641045401952'> or 'gym' in <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__()' id='140641045400272'>)
+E   AssertionError: assert 'patches' in <MagicMock name='mock._run_build_stage().output' id='140641045403968'>
+     +  where <MagicMock name='mock._run_build_stage().output' id='140641045403968'> = <MagicMock name='mock._run_build_stage()' id='140641045403632'>.output
+/workspace/genie-api/back/tests/workflows/test_stages.py:209: AssertionError: assert 'patches' in <MagicMock name='mock._run_build_stage().output' id='140641045403968'>
+E   AssertionError: assert <MagicMock na...641045404640'> == []
+      
+      Use -v to get more diff
+/workspace/genie-api/back/tests/workflows/test_stages.py:224: AssertionError: assert <MagicMock na...641045404640'> == []
+E   AssertionError: assert '__origin__' in <MagicMock name='mock._run_recon_stage().output.__getitem__()' id='140641045407664'>
+/workspace/genie-api/back/tests/workflows/test_stages.py:236: AssertionError: assert '__origin__' in <MagicMock name='mock._run_recon_stage().output.__getitem__()' id='140641045407664'>
+E   AssertionError: assert 'office' in <MagicMock name='mock._run_recon_stage().output.__getitem__()' id='140641045407664'>
+/workspace/genie-api/back/tests/workflows/test_stages.py:261: AssertionError: assert 'office' in <MagicMock name='mock._run_recon_stage().output.__getitem__()' id='140641045407664'>
+E   AssertionError: assert <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__()' id='140641045400272'> == '__origin__'
+/workspace/genie-api/back/tests/workflows/test_stages.py:279: AssertionError: assert <MagicMock name='mock._run_route_stage().output.__getitem__().__getitem__().__getitem__()' id='140641045400272'> == '__origin__'
+=============================== warnings summary ===============================
+../../../usr/local/lib/python3.13/dist-packages/fastapi/testclient.py:1
+  /usr/local/lib/python3.13/dist-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/models/test_safe_gemini.py::TestInvokeMethods::test_invoke_retries_on_internal_error
+  /usr/lib/python3.13/unittest/mock.py:2247: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    def __init__(self, name, parent):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_redis_session_fixes.py::test_send_client_action_does_not_mutate_params
+  /usr/local/lib/python3.13/dist-packages/_pytest/stash.py:108: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    del self._storage[key]
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/agents/test_factory_delegation.py::test_sandbox_present_swaps_to_delegate
+FAILED tests/agents/test_factory_delegation.py::test_no_sandbox_no_delegate
+FAILED tests/agents/test_factory_discovery.py::test_factory_builds_only_discovery_tool_when_flag_set
+FAILED tests/agents/test_factory_discovery.py::test_factory_uses_legacy_mode_when_flag_not_set
+FAILED tests/agents/test_group_agent.py::test_group_agent_type_builds_group_with_web_search_only
+FAILED tests/agents/test_group_agent.py::test_group_agent_skips_web_search_for_gemma
+FAILED tests/agents/test_memory_decay.py::test_nomiagent_importable - Asserti...
+FAILED tests/agents/test_memory_decay.py::test_old_memory_gets_stale_prefix
+FAILED tests/agents/test_memory_decay.py::test_fresh_memory_not_marked - Type...
+FAILED tests/agents/test_memory_decay.py::test_recently_updated_memory_not_marked
+FAILED tests/agents/test_memory_decay.py::test_already_stale_memory_not_double_marked
+FAILED tests/agents/test_memory_decay.py::test_stale_prefix_removed_when_memory_confirmed
+FAILED tests/agents/test_memory_decay.py::test_no_user_id_skips_check - TypeE...
+FAILED tests/agents/test_memory_decay.py::test_no_memory_manager_skips_check
+FAILED tests/agents/test_memory_decay.py::test_memory_with_no_timestamps_skipped
+FAILED tests/agents/test_memory_decay.py::test_normalize_strips_stale_prefix
+FAILED tests/agents/test_memory_decay.py::test_arun_calls_mark_stale_after_run
+FAILED tests/agents/test_memory_decay.py::test_arun_streaming_calls_mark_stale_in_order
+FAILED tests/commands/test_app_commands_endpoint.py::test_get_commands_returns_listing
+FAILED tests/commands/test_app_commands_endpoint.py::test_get_commands_with_connected_integrations
+FAILED tests/commands/test_app_commands_endpoint.py::test_get_commands_includes_slash_commands
+FAILED tests/models/test_safe_gemini.py::TestInvokeMethods::test_invoke_retries_on_internal_error
+FAILED tests/models/test_safe_gemini.py::TestInvokeMethods::test_invoke_raises_after_max_retries
+FAILED tests/test_redis_session_history.py::test_build_history_messages_produces_multi_turn
+FAILED tests/test_redis_session_history.py::test_build_history_messages_empty_history
+FAILED tests/test_redis_worker_fixes.py::test_send_parse_error_frame_handles_malformed_data
+FAILED tests/test_redis_worker_fixes.py::test_send_parse_error_frame_with_redis_error_logs
+FAILED tests/test_redis_worker_fixes.py::test_worker_retries_on_start_failure
+FAILED tests/tools/test_discovery.py::test_discovery_tool_returns_result_on_success
+FAILED tests/tools/test_discovery.py::test_discovery_tool_returns_question_for_ambiguous
+FAILED tests/tools/test_discovery.py::test_discovery_question_returns_to_chat_without_popping_ask_user
+FAILED tests/tools/test_discovery.py::test_discovery_question_falls_back_to_chat_without_runner
+FAILED tests/tools/test_discovery.py::test_discovery_tool_returns_error_for_no_tool
+FAILED tests/tools/test_discovery.py::test_discovery_tool_error_includes_resolved_tool
+FAILED tests/tools/test_discovery.py::test_discovery_tool_uses_client_runner_for_client_execution
+FAILED tests/tools/test_discovery.py::test_discovery_injects_integration_id_for_client_method
+FAILED tests/tools/test_discovery.py::test_discovery_overrides_question_for_all_accounts
+FAILED tests/tools/test_discovery.py::test_discovery_tool_executes_for_all_accounts_with_asterisk
+FAILED tests/tools/test_discovery.py::test_discovery_routes_to_local_toolkit_async_method
+FAILED tests/tools/test_discovery.py::test_discovery_local_toolkit_sync_method_and_schema
+FAILED tests/tools/test_discovery.py::test_discovery_local_unknown_method_returns_error
+FAILED tests/tools/test_executor.py::test_executor_raises_for_unknown_tool - ...
+FAILED tests/tools/test_executor.py::test_executor_calls_web_search - Asserti...
+FAILED tests/tools/test_executor.py::test_executor_calls_gmail - AssertionErr...
+FAILED tests/tools/test_executor.py::test_executor_raises_for_unknown_method
+FAILED tests/tools/test_executor.py::test_executor_returns_empty_string_for_none_result
+FAILED tests/tools/test_executor.py::test_executor_calls_github - AssertionEr...
+FAILED tests/tools/test_executor.py::test_executor_calls_async_method - Asser...
+FAILED tests/tools/test_executor.py::test_executor_calls_sync_method - Assert...
+FAILED tests/tools/test_maps.py::test_search_places_url_uses_coordinates_not_address
+FAILED tests/tools/test_registry.py::test_registry_returns_schemas_for_connected_integrations
+FAILED tests/tools/test_registry.py::test_registry_skips_unknown_integrations
+FAILED tests/tools/test_registry.py::test_registry_includes_web_search_without_accounts
+FAILED tests/tools/test_router.py::test_router_returns_execute_for_clear_request
+FAILED tests/tools/test_router.py::test_router_returns_question_for_write_with_multiple_accounts
+FAILED tests/tools/test_router.py::test_router_returns_none_for_unknown_request
+FAILED tests/tools/test_router.py::test_router_passes_context_to_model - KeyE...
+FAILED tests/tools/test_router.py::test_router_returns_none_on_model_failure
+FAILED tests/tools/test_router.py::test_router_returns_none_on_list_response
+FAILED tests/tools/test_router.py::test_router_returns_none_on_empty_list - A...
+FAILED tests/tools/test_router.py::test_router_returns_none_on_list_with_invalid_elements
+FAILED tests/tools/test_router.py::test_router_returns_asterisk_for_all_accounts_request
+FAILED tests/workflows/test_clarification.py::test_extract_stage_fires_first_on_new_session
+FAILED tests/workflows/test_clarification.py::test_clarification_loop_pauses_on_pending_question
+FAILED tests/workflows/test_clarification.py::test_clarification_answer_returns_to_stage
+FAILED tests/workflows/test_clarification.py::test_build_patches_stored_in_session_state
+FAILED tests/workflows/test_models.py::test_plan_status_values - AssertionErr...
+FAILED tests/workflows/test_models.py::test_stage_result_defaults - Assertion...
+FAILED tests/workflows/test_models.py::test_cluster_defaults - AssertionError...
+FAILED tests/workflows/test_models.py::test_travel_block - AssertionError: as...
+FAILED tests/workflows/test_stages.py::test_extract_returns_stage_result - Ty...
+FAILED tests/workflows/test_stages.py::test_extract_captures_pending_questions
+FAILED tests/workflows/test_stages.py::test_extract_no_questions_when_all_known
+FAILED tests/workflows/test_stages.py::test_extract_graceful_fallback_on_bad_json
+FAILED tests/workflows/test_stages.py::test_recon_geocodes_non_home_locations
+FAILED tests/workflows/test_stages.py::test_recon_asks_transport_when_none - ...
+FAILED tests/workflows/test_stages.py::test_recon_complete_when_transport_known
+FAILED tests/workflows/test_stages.py::test_cluster_returns_ordered_clusters
+FAILED tests/workflows/test_stages.py::test_cluster_fallback_one_cluster_per_task
+FAILED tests/workflows/test_stages.py::test_route_creates_travel_blocks_between_clusters
+FAILED tests/workflows/test_stages.py::test_route_uses_ddg_fallback_when_no_coords
+FAILED tests/workflows/test_stages.py::test_route_travel_block_title_format
+FAILED tests/workflows/test_stages.py::test_build_stores_patches_in_output - ...
+FAILED tests/workflows/test_stages.py::test_build_returns_empty_patches_on_bad_json
+FAILED tests/workflows/test_stages.py::test_recon_geocodes_user_location_as_origin
+FAILED tests/workflows/test_stages.py::test_recon_continues_without_origin_when_geocode_fails
+FAILED tests/workflows/test_stages.py::test_route_prepends_origin_to_first_cluster_when_origin_present
+87 failed, 438 passed, 3 warnings in 302.68s (0:05:02)
