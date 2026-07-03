@@ -93,20 +93,26 @@ class SandboxTools(Toolkit):
     async def ensure_git_auth(self) -> None:
         """Authenticate ALL github.com git ops in this sandbox for the current run.
 
-        Writes a global, host-scoped ``http.extraHeader`` into ~/.gitconfig so that
-        raw ``git clone``/``pull``/``push``, submodules and ``pip install
+        Writes a global, host-scoped ``credential.helper`` into ~/.gitconfig so
+        that raw ``git clone``/``pull``/``push``, submodules and ``pip install
         git+https://github.com/...`` all carry the user's token — not just the
-        dedicated ``clone_repo`` tool. The header is host-scoped to github.com so it
-        is never sent to other hosts, and lives only in ~/.gitconfig (never in a
-        repo's .git/config or remote URL, so ``git remote -v`` stays clean).
+        dedicated ``clone_repo`` tool. The helper is host-scoped to github.com so
+        it is only consulted for that host, and lives only in ~/.gitconfig (never
+        in a repo's .git/config or remote URL, so ``git remote -v`` stays clean).
+
+        The sandbox's ``safe-git`` wrapper restricts ``git config`` writes to the
+        ``user.*`` and ``credential.*`` namespaces, so an ``http.extraHeader``
+        write is rejected; a ``credential.<url>.helper`` write is accepted and
+        gives the same effect — git consults the helper whenever it needs a
+        credential for github.com.
 
         Idempotent per token value. A no-op when no token is available. Each agent
         run gets a fresh SandboxTools (and thus a fresh token), so the first
-        git-touching call of the run rewrites the header — keeping it valid despite
+        git-touching call of the run rewrites the helper — keeping it valid despite
         the ~1h installation-token TTL and the sandbox persisting across runs.
 
-        Separate ``exec`` calls do NOT share environment, so an env var / credential
-        helper would not survive — persisting through ~/.gitconfig is required.
+        Separate ``exec`` calls do NOT share environment, so an env var would not
+        survive — persisting through ~/.gitconfig is required.
         """
         token = self.github_token
         if self._git_auth_token == token:
@@ -115,14 +121,21 @@ class SandboxTools(Toolkit):
             # No token: skip and remember so we don't re-check on every call.
             self._git_auth_token = ""
             return
-        auth = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+        # Inline shell helper: git invokes it via `sh -c <value>` whenever it
+        # needs a credential for github.com and reads username/password from
+        # its stdout. The leading "!" makes git treat the value as a shell
+        # command rather than a `git-credential-<name>` lookup.
+        helper = (
+            "!f() { echo username=x-access-token; "
+            f"echo password={token}; }}; f"
+        )
         command = [
             "git",
             "config",
             "--global",
             "--replace-all",
-            "http.https://github.com/.extraHeader",
-            f"Authorization: Basic {auth}",
+            "credential.https://github.com.helper",
+            helper,
         ]
         result = await self._exec_with_retry(command, timeout=30)
         if isinstance(result, dict) and result.get("exit_code") not in (0, None):

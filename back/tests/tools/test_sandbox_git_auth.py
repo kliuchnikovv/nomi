@@ -3,15 +3,17 @@
 The sandbox engineer often runs raw ``git clone <url>`` via ``exec_command``
 instead of the dedicated ``clone_repo`` tool, so git received no credentials and
 failed with "could not read Username". ``ensure_git_auth`` provisions a global,
-host-scoped ``http.extraHeader`` into the sandbox's ~/.gitconfig so EVERY github.com
-git op is authenticated. These tests pin that behaviour without a real sandbox.
+host-scoped ``credential.<url>.helper`` in the sandbox's ~/.gitconfig so EVERY
+github.com git op is authenticated. The sandbox's ``safe-git`` wrapper rejects
+``git config`` writes outside ``user.*``/``credential.*``, so a credential
+helper is the only namespace that works. These tests pin that behaviour without
+a real sandbox.
 
 The sandbox plugin lives at repo-root ``plugins/sandbox/server`` and is loaded by
 the plugin loader at runtime, so we load the modules by file path (mirroring
 ``tests/test_sandbox_recovery.py``).
 """
 
-import base64
 import importlib.util
 import os
 import sys
@@ -45,9 +47,11 @@ tools = _load("plugins.sandbox.server.tools", "tools.py")
 SandboxTools = tools.SandboxTools
 
 
-def _expected_header(token: str) -> str:
-    auth = base64.b64encode(f"x-access-token:{token}".encode()).decode()
-    return f"Authorization: Basic {auth}"
+def _expected_helper(token: str) -> str:
+    return (
+        "!f() { echo username=x-access-token; "
+        f"echo password={token}; }}; f"
+    )
 
 
 class _RecordingService:
@@ -88,8 +92,8 @@ async def test_ensure_git_auth_issues_global_config():
             "config",
             "--global",
             "--replace-all",
-            "http.https://github.com/.extraHeader",
-            _expected_header("tok123"),
+            "credential.https://github.com.helper",
+            _expected_helper("tok123"),
         ]
     ]
     assert st._git_auth_token == "tok123"
@@ -123,7 +127,7 @@ async def test_ensure_git_auth_rewrites_on_token_change():
 
     configs = _config_commands(fake)
     assert len(configs) == 2
-    assert configs[1][-1] == _expected_header("tok2")
+    assert configs[1][-1] == _expected_helper("tok2")
     assert st._git_auth_token == "tok2"
 
 

@@ -15,6 +15,33 @@ from typing import Any, Dict, Optional
 import aiohttp
 import redis.asyncio as redis
 
+try:  # normal package import (production)
+    from plugins.telegram.server.inline_actions import (
+        INLINE_ACTIONS,
+        TWEMOJI_THUMB_SIZE,
+        action_emoji,
+        decode_result_id,
+        encode_result_id,
+        parse_inline_command,
+        render_prompt,
+        thumbnail_url,
+    )
+except ImportError:  # loaded standalone by path (e.g. tests)
+    import importlib.util as _ilu
+
+    _ia_path = os.path.join(os.path.dirname(__file__), "inline_actions.py")
+    _ia_spec = _ilu.spec_from_file_location("telegram_inline_actions", _ia_path)
+    _ia = _ilu.module_from_spec(_ia_spec)
+    _ia_spec.loader.exec_module(_ia)
+    INLINE_ACTIONS = _ia.INLINE_ACTIONS
+    TWEMOJI_THUMB_SIZE = _ia.TWEMOJI_THUMB_SIZE
+    action_emoji = _ia.action_emoji
+    decode_result_id = _ia.decode_result_id
+    encode_result_id = _ia.encode_result_id
+    parse_inline_command = _ia.parse_inline_command
+    render_prompt = _ia.render_prompt
+    thumbnail_url = _ia.thumbnail_url
+
 logger = logging.getLogger(__name__)
 
 TELEGRAM_API_BASE = "https://api.telegram.org"
@@ -623,6 +650,8 @@ class TelegramService:
         is_voice: bool = False,
         inline_message_id: Optional[str] = None,
         inline_query: str = "",
+        brain_prompt: Optional[str] = None,
+        inline_action_emoji: str = "❓",
     ) -> None:
         """Persist a user message, load history, and publish it to the brain via Redis.
 
@@ -632,6 +661,11 @@ class TelegramService:
         ``inline_message_id`` is set, the delivery handler edits that inline message
         in place — so the answer appears in the chat where the inline query was used,
         not in the bot's private chat.
+
+        ``text`` is the raw user text (saved to history); ``brain_prompt`` is the
+        action-templated prompt actually sent to the brain (defaults to ``text``).
+        ``inline_action_emoji`` is forwarded so the delivery header reflects the
+        chosen action (🌐 for translate, 📝 for summarize, …).
         """
         import uuid
 
@@ -710,7 +744,7 @@ class TelegramService:
             "ts": datetime.now(timezone.utc).isoformat(),
             "payload": {
                 "message_id": message_id,
-                "message": text,
+                "message": brain_prompt or text,
                 "role": "user",
                 "trace_id": str(uuid.uuid4()),
                 "user_id": genie_user_id,
@@ -719,6 +753,7 @@ class TelegramService:
                 "telegram_chat_id": chat_id,
                 "telegram_inline_message_id": inline_message_id,
                 "telegram_inline_query": inline_query,
+                "telegram_inline_action": inline_action_emoji,
                 "model": selected_model,
                 "endpoint": model_config.get("endpoint", "") if model_config else "",
                 "streaming": model_config.get("streaming", False)
@@ -766,17 +801,51 @@ class TelegramService:
             return None
         return {"user_id": str(row["user_id"]), "data": data}
 
-    async def _handle_inline_query(self, query: Dict[str, Any]) -> None:
-        """Answer an inline query (``@bot <text>``) with a trigger card.
+    @staticmethod
+    def _build_inline_card(action_key: str, payload_text: str) -> Dict[str, Any]:
+        """Build one inline result card for an action over ``payload_text``.
 
-        The card posts a placeholder message and carries an inline keyboard, so
-        Telegram returns ``inline_message_id`` in ``chosen_inline_result``. That id
-        lets the delivery handler edit the message in place — the AI answer then
-        appears in the chat where the query was used, not in the bot's private chat.
+        The action is encoded into the card id so ``chosen_inline_result`` can
+        recover which action was picked. The card posts a placeholder message and
+        carries an inline keyboard, so Telegram returns ``inline_message_id`` —
+        the delivery handler then edits that message in place with the answer.
         """
         import html
-        import uuid
 
+        spec = INLINE_ACTIONS[action_key]
+        emoji = spec["emoji"]
+        placeholder = f"<b>{emoji} {html.escape(payload_text)}</b>\n\n⏳ Nomi is thinking…"
+        return {
+            "type": "article",
+            "id": encode_result_id(action_key),
+            "title": spec["title"],
+            # Gray second line: a static hint about the action (not the typed text,
+            # which already shows in the placeholder message below).
+            "description": spec["hint"],
+            # Left icon: a colored Twemoji PNG for the action (Telegram fetches it).
+            "thumbnail_url": thumbnail_url(action_key),
+            "thumbnail_width": TWEMOJI_THUMB_SIZE,
+            "thumbnail_height": TWEMOJI_THUMB_SIZE,
+            "input_message_content": {
+                "message_text": placeholder,
+                "parse_mode": "HTML",
+            },
+            # An inline keyboard is required for Telegram to return
+            # inline_message_id in chosen_inline_result (used to edit in place).
+            "reply_markup": {
+                "inline_keyboard": [
+                    [{"text": "⏳ Nomi is thinking…", "callback_data": "noop"}]
+                ]
+            },
+        }
+
+    async def _handle_inline_query(self, query: Dict[str, Any]) -> None:
+        """Answer an inline query (``@bot <text>``) with a menu of action cards.
+
+        With no prefix, every action in :data:`INLINE_ACTIONS` is offered (ask,
+        translate, summarize, …). An explicit prefix (``tr: привет``) skips the
+        menu and shows a single card for that action over the stripped text.
+        """
         query_id = query.get("id", "")
         text = (query.get("query") or "").strip()
         tg_user_id = (query.get("from") or {}).get("id", 0)
@@ -800,24 +869,16 @@ class TelegramService:
             await self.answer_inline_query(query_id, [], cache_time=1, is_personal=True)
             return
 
-        placeholder = f"<b>❓ {html.escape(text)}</b>\n\n⏳ Nomi думает…"
-        card = {
-            "type": "article",
-            "id": str(uuid.uuid4()),
-            "title": "Спросить Nomi",
-            "description": text,
-            "input_message_content": {
-                "message_text": placeholder,
-                "parse_mode": "HTML",
-            },
-            # An inline keyboard is required for Telegram to return
-            # inline_message_id in chosen_inline_result (used to edit in place).
-            "reply_markup": {
-                "inline_keyboard": [[{"text": "⏳ Nomi думает…", "callback_data": "noop"}]]
-            },
-        }
+        action, payload = parse_inline_command(text)
+        if action is not None:
+            # Explicit prefix → a single card for that action.
+            cards = [self._build_inline_card(action, payload)]
+        else:
+            # No prefix → offer the full menu over the typed text.
+            cards = [self._build_inline_card(key, text) for key in INLINE_ACTIONS]
+
         await self.answer_inline_query(
-            query_id, [card], cache_time=1, is_personal=True
+            query_id, cards, cache_time=1, is_personal=True
         )
 
     async def _handle_chosen_inline_result(self, chosen: Dict[str, Any]) -> None:
@@ -837,13 +898,21 @@ class TelegramService:
         if account is None:
             return
 
+        # Which action was picked (from the card id) and the text to act on
+        # (re-parsed to strip any prefix the user typed).
+        action = decode_result_id(chosen.get("result_id", ""))
+        _, payload = parse_inline_command(text)
+        brain_prompt = render_prompt(action, payload)
+
         await self._dispatch_to_brain(
             chat_id=tg_user_id,
             genie_user_id=account["user_id"],
             data=account["data"],
-            text=text,
+            text=payload,
+            brain_prompt=brain_prompt,
             inline_message_id=inline_message_id,
-            inline_query=text,
+            inline_query=payload,
+            inline_action_emoji=action_emoji(action),
         )
 
     async def _handle_callback_query(self, query: Dict[str, Any]) -> None:
