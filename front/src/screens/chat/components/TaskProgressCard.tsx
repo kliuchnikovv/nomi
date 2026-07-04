@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     View,
     Text,
@@ -6,12 +6,19 @@ import {
     TouchableOpacity,
     TextInput,
     ActivityIndicator,
+    ScrollView,
+    Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Markdown from 'react-native-markdown-display';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { useTheme } from '../../../context/ThemeContext';
 import { tasksApi } from '../../../apiClient';
 import type { AgentTaskStatus, AgentTaskStep } from '../../main/models';
 import { statusColor, statusLabel } from '../../tasks/status';
+import { createMarkdownStyles } from '../message/dynamicStyles';
+import { createMarkdownRules } from '../message/markdownRules';
 
 /** The slice of an AgentTask carried in a task_progress message's metadata. */
 export type TaskProgressMeta = {
@@ -26,12 +33,22 @@ export type TaskProgressMeta = {
     clarify?: { requestId: string; question: string; options: string[] };
 };
 
-const ACTIVE: AgentTaskStatus[] = [
+export const ACTIVE_TASK_STATUSES: AgentTaskStatus[] = [
     'planning',
     'running',
     'waiting_input',
     'paused',
 ];
+
+/** True while a task is still running (shown docked above the composer). */
+export function isTaskActive(meta: TaskProgressMeta): boolean {
+    return (
+        !meta.finished &&
+        ACTIVE_TASK_STATUSES.includes(
+            (meta.status ?? 'running') as AgentTaskStatus,
+        )
+    );
+}
 
 function stepIcon(status: AgentTaskStep['status']): {
     name: keyof typeof Ionicons.glyphMap;
@@ -49,17 +66,29 @@ function stepIcon(status: AgentTaskStep['status']): {
  * leaving the conversation. Actions call tasksApi directly; status updates
  * arrive as task_progress frames that re-render this card.
  */
-export const TaskProgressCard: React.FC<{ task: TaskProgressMeta }> = ({
-    task,
-}) => {
+export const TaskProgressCard: React.FC<{
+    task: TaskProgressMeta;
+    /** Docked above the composer (pinned) rather than inline in the thread. */
+    docked?: boolean;
+}> = ({ task, docked = false }) => {
     const { theme } = useTheme();
     const [busy, setBusy] = useState(false);
     const [steerText, setSteerText] = useState('');
     const [clarifyText, setClarifyText] = useState('');
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+    const markdownRules = useMemo(
+        () =>
+            createMarkdownRules({
+                onCodeCopy: () => {},
+                onLinkPress: () => {},
+                onLinkCopy: () => {},
+            }),
+        [],
+    );
 
     const status = (task.status ?? 'running') as AgentTaskStatus;
     const plan = task.plan ?? [];
-    const active = !task.finished && ACTIVE.includes(status);
+    const active = !task.finished && ACTIVE_TASK_STATUSES.includes(status);
     const doneCount = plan.filter(s => s.status === 'done').length;
     const failColor = statusColor('failed', theme);
 
@@ -103,48 +132,72 @@ export const TaskProgressCard: React.FC<{ task: TaskProgressMeta }> = ({
         active && status === 'waiting_input' && !!task.approvalRequestId;
     const showClarify = active && status === 'waiting_input' && !!task.clarify;
 
-    return (
-        <View
-            style={[
-                styles.card,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-        >
-            {/* Header: label + status pill */}
-            <View style={styles.headerRow}>
-                <Ionicons name="construct" size={15} color={theme.accent} />
-                <Text
-                    style={[styles.headerLabel, { color: theme.textSecondary }]}
-                >
-                    Background task
-                </Text>
-                <View style={styles.headerSpacer} />
-                <View style={styles.statusRow}>
-                    <View
-                        style={[
-                            styles.dot,
-                            { backgroundColor: statusColor(status, theme) },
-                        ]}
-                    />
-                    <Text
-                        style={[
-                            styles.statusText,
-                            { color: theme.textSecondary },
-                        ]}
-                    >
-                        {statusLabel(status)}
-                    </Text>
-                </View>
-            </View>
+    // Collapse to a compact 2-3 line summary (docked only). Approval/clarify
+    // gates stay visible even when collapsed since they need user action.
+    const [collapsed, setCollapsed] = useState(false);
+    const collapsible = docked;
+    const isCollapsed = collapsible && collapsed;
+    const runningStep = plan.find(s => s.status === 'running');
+    const summaryLine =
+        runningStep?.title ||
+        (plan.length ? `${doneCount}/${plan.length} steps done` : '');
 
-            {/* Goal */}
-            {task.goal ? (
-                <Text style={[styles.goal, { color: theme.textPrimary }]}>
-                    {task.goal}
+    // Pan on the handle/header: drag down collapses, drag up expands (docked).
+    const pan = useMemo(
+        () =>
+            Gesture.Pan().onEnd(e => {
+                'worklet';
+                if (e.translationY > 24) runOnJS(setCollapsed)(true);
+                else if (e.translationY < -24) runOnJS(setCollapsed)(false);
+            }),
+        [],
+    );
+
+    const hasActions = showApproval || showClarify || (active && !isCollapsed);
+
+    const header = (
+        <View style={styles.headerRow}>
+            <Ionicons name="construct" size={15} color={theme.accent} />
+            <Text style={[styles.headerLabel, { color: theme.textSecondary }]}>
+                Background task
+            </Text>
+            <View style={styles.headerSpacer} />
+            <View style={styles.statusRow}>
+                <View
+                    style={[
+                        styles.dot,
+                        { backgroundColor: statusColor(status, theme) },
+                    ]}
+                />
+                <Text
+                    style={[styles.statusText, { color: theme.textSecondary }]}
+                >
+                    {statusLabel(status)}
                 </Text>
+            </View>
+        </View>
+    );
+
+    // Compact 2-line summary shown when the docked card is collapsed.
+    const summary =
+        task.goal || summaryLine ? (
+            <Text
+                style={[styles.summaryLine, { color: theme.textSecondary }]}
+                numberOfLines={2}
+            >
+                {[task.goal, summaryLine].filter(Boolean).join(' — ')}
+            </Text>
+        ) : null;
+
+    // Scrollable body: goal, plan checklist, and (finished) markdown result.
+    const body = (
+        <>
+            {task.goal ? (
+                <Markdown style={markdownStyles as any} rules={markdownRules}>
+                    {task.goal}
+                </Markdown>
             ) : null}
 
-            {/* Plan checklist with progress */}
             {plan.length > 0 && (
                 <View style={styles.plan}>
                     <Text
@@ -186,7 +239,17 @@ export const TaskProgressCard: React.FC<{ task: TaskProgressMeta }> = ({
                 </View>
             )}
 
-            {/* Approval gate for risky steps */}
+            {!active && task.result ? (
+                <Markdown style={markdownStyles as any} rules={markdownRules}>
+                    {task.result}
+                </Markdown>
+            ) : null}
+        </>
+    );
+
+    // Fixed action area (never scrolls away): approval, clarify, steer/stop.
+    const actions = (
+        <>
             {showApproval && (
                 <View style={[styles.approval, { borderColor: failColor }]}>
                     <Text
@@ -229,17 +292,14 @@ export const TaskProgressCard: React.FC<{ task: TaskProgressMeta }> = ({
                 </View>
             )}
 
-            {/* Clarify gate: a mid-task question the agent needs answered */}
             {showClarify && task.clarify && (
                 <View style={[styles.clarify, { borderColor: theme.accent }]}>
-                    <Text
-                        style={[
-                            styles.clarifyTitle,
-                            { color: theme.textPrimary },
-                        ]}
+                    <Markdown
+                        style={markdownStyles as any}
+                        rules={markdownRules}
                     >
                         {task.clarify.question || 'The agent has a question.'}
-                    </Text>
+                    </Markdown>
                     {task.clarify.options.length > 0 && (
                         <View style={styles.optionsRow}>
                             {task.clarify.options.map(option => (
@@ -297,15 +357,7 @@ export const TaskProgressCard: React.FC<{ task: TaskProgressMeta }> = ({
                 </View>
             )}
 
-            {/* Final result */}
-            {!active && task.result ? (
-                <Text style={[styles.result, { color: theme.textPrimary }]}>
-                    {task.result}
-                </Text>
-            ) : null}
-
-            {/* Steering + stop while the task is running */}
-            {active && (
+            {active && !isCollapsed && (
                 <View style={styles.controls}>
                     <TextInput
                         style={[
@@ -355,6 +407,59 @@ export const TaskProgressCard: React.FC<{ task: TaskProgressMeta }> = ({
                     </TouchableOpacity>
                 </View>
             )}
+        </>
+    );
+
+    // Docked variant: fixed drag-handle + header on top (never scroll), a
+    // scrollable body, and a fixed action area. Drag the handle to collapse.
+    if (docked) {
+        return (
+            <View
+                style={[
+                    styles.card,
+                    styles.cardDocked,
+                    {
+                        backgroundColor:
+                            theme.surfaceHighlight ?? theme.surface,
+                        borderColor: theme.accent,
+                    },
+                ]}
+            >
+                <GestureDetector gesture={pan}>
+                    <View style={styles.handleZone}>
+                        <View style={styles.handle} />
+                        {header}
+                    </View>
+                </GestureDetector>
+                {isCollapsed ? (
+                    <View style={styles.dockedCollapsed}>{summary}</View>
+                ) : (
+                    <ScrollView
+                        style={styles.dockedScroll}
+                        contentContainerStyle={styles.dockedScrollContent}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {body}
+                    </ScrollView>
+                )}
+                {hasActions ? (
+                    <View style={styles.dockedActions}>{actions}</View>
+                ) : null}
+            </View>
+        );
+    }
+
+    // Inline variant (finished task, in the chat thread): plain card, no handle.
+    return (
+        <View
+            style={[
+                styles.card,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
+        >
+            {header}
+            {body}
+            {actions}
         </View>
     );
 };
@@ -368,6 +473,39 @@ const styles = StyleSheet.create({
         marginHorizontal: 8,
         gap: 10,
     },
+    // Docked above the composer: flush margins, no padding/gap of its own
+    // (the fixed handle/header, the scrollable body, and the fixed action area
+    // each supply their own). The body ScrollView is height-capped, not the card.
+    cardDocked: {
+        marginHorizontal: 8,
+        marginVertical: 0,
+        padding: 0,
+    },
+    handleZone: {
+        paddingTop: 8,
+        paddingBottom: 6,
+        paddingHorizontal: 12,
+        gap: 8,
+    },
+    handle: {
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: '#8E8E93',
+        alignSelf: 'center',
+    },
+    dockedScroll: {
+        maxHeight: Math.round(Dimensions.get('window').height * 0.4),
+    },
+    dockedScrollContent: { paddingHorizontal: 12, paddingBottom: 10, gap: 10 },
+    dockedCollapsed: { paddingHorizontal: 12, paddingBottom: 10 },
+    dockedActions: {
+        paddingHorizontal: 12,
+        paddingBottom: 12,
+        paddingTop: 4,
+        gap: 10,
+    },
+    summaryLine: { fontSize: 13, lineHeight: 18 },
     headerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     headerLabel: {
         fontSize: 12,

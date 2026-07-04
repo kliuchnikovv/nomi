@@ -58,13 +58,20 @@ import { ProjectSuggestionBanner } from './ProjectSuggestionBanner';
 import { ChatRecapBanner } from './ChatRecapBanner';
 import { PersistentChatEmptyState, useChips } from './PersistentChatEmptyState';
 import { SuggestionChips } from './SuggestionChips';
-import { useChatStore } from '../../../store/chatStore';
+import {
+    useChatStore,
+    selectActiveTaskProgress,
+} from '../../../store/chatStore';
 import { SessionHistorySheet, formatSessionDate } from './SessionHistorySheet';
 import { AVAILABLE_TEAMS } from '../teams';
 import { DiceRollOverlay } from '../components/DiceRollOverlay';
 import { ToastContainer } from '../../../utils/ToastContainer';
 import { useAskUser } from '../AskUserContext';
 import { AskUserDialog } from '../components/AskUserDialog';
+import {
+    TaskProgressCard,
+    type TaskProgressMeta,
+} from '../components/TaskProgressCard';
 import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
 import type { ChatStackParamList } from '../../../navigation/types';
 import type { Chat, Message } from '../../main/models';
@@ -164,6 +171,10 @@ export function ChatDetailScreen() {
     const followUps = useChatStore(s =>
         activeChatID ? s.followUps[activeChatID] : undefined,
     );
+    // The active background task, pinned in a docked card above the composer.
+    const activeTask = useChatStore(selectActiveTaskProgress(activeChatID)) as
+        | TaskProgressMeta
+        | undefined;
     const handleFollowUpPress = useCallback(
         (text: string) => {
             setPendingInputText(text);
@@ -1280,6 +1291,11 @@ export function ChatDetailScreen() {
             >
                 {/* Follow-up suggestion chips are now rendered inside ChatInput,
                     on the same row as the model picker (see chips wiring above). */}
+                {/* Active background task, docked directly above the composer so
+                    its progress/questions stay in view and ride the keyboard. */}
+                {activeTask ? (
+                    <TaskProgressCard task={activeTask} docked />
+                ) : null}
                 <Animated.View style={{ paddingBottom: insets.bottom }}>
                     {renderInputToolbarBase({})}
                 </Animated.View>

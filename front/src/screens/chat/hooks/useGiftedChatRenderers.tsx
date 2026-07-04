@@ -459,10 +459,13 @@ export function useGiftedChatRenderers({
                 previousMessageToolCalls,
             } = props;
 
-            // In-chat background-task card (rendered before the system branch,
-            // since the synthetic task message maps to the 'system' user).
+            // Background-task card. While active, it's pinned in a docked card
+            // above the composer (see ChatDetailScreen) — so hide it from the
+            // thread here. Once finished it stays inline as a history record.
             if (currentMessage?.task_progress) {
-                return <TaskProgressCard task={currentMessage.task_progress} />;
+                return currentMessage.task_progress.finished ? (
+                    <TaskProgressCard task={currentMessage.task_progress} />
+                ) : null;
             }
 
             // Slash-command call: render as a full-width left-aligned bar

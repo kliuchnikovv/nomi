@@ -1296,7 +1296,7 @@ class RedisSession:
                             existing = knowledge.search(
                                 query=fact,
                                 filters={"user_id": user_id},
-                                num_documents=1,
+                                max_results=1,
                             )
                             if existing:
                                 top = existing[0]

@@ -745,10 +745,10 @@ class AgentFactory:
                 # cancels via CancelledError regardless. Both are env-overridable.
                 if task_mode:
                     engineer_tool_limit = int(
-                        os.getenv("TASK_SANDBOX_TOOL_CALL_LIMIT", "200")
+                        os.getenv("TASK_SANDBOX_TOOL_CALL_LIMIT", "100")
                     )
                     delegation_timeout = int(
-                        os.getenv("TASK_DELEGATION_TIMEOUT_S", "1800")
+                        os.getenv("TASK_DELEGATION_TIMEOUT_S", "900")
                     )
                 else:
                     engineer_tool_limit = int(
@@ -822,10 +822,13 @@ class AgentFactory:
                 cmd_type = (command_desc or {}).get("type")
                 is_dev_team = cmd_type == "development_team"
                 agent_type_l = (agent_type or "nomi").lower()
-                allow_background = (
-                    task_spawner is not None
-                    and agent_type_l not in ("planner", "team")
-                    and (is_dev_team or not cmd_type)
+                # development_team is exempt from BOTH the agent_type and the
+                # cmd_type exclusions: dev mode may arrive as agent_type "team"
+                # (mobile) yet must still be able to spawn a background coding
+                # task. Non-dev-team commands and planner/team agents may not.
+                allow_background = task_spawner is not None and (
+                    is_dev_team
+                    or (agent_type_l not in ("planner", "team") and not cmd_type)
                 )
                 if allow_background and is_dev_team:
                     # Every background spawn from developer mode is a coding task,

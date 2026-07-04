@@ -29,7 +29,7 @@ def make_search_chat_history(knowledge: "Knowledge", user_id: str):
             results = knowledge.search(
                 query,
                 filters={"user_id": user_id, "source": "chat_history"},
-                limit=limit,
+                max_results=limit,
             )
         except Exception as exc:
             logger.warning("[chat_history] search failed: %s", exc)

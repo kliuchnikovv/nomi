@@ -3,8 +3,10 @@ Sandbox tools for server-side plugin.
 Provides isolated Linux environment for code execution.
 """
 
+import asyncio
 import base64
 import logging
+import os
 import re
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
@@ -13,6 +15,41 @@ from agno.tools import Toolkit
 from plugins.sandbox.server.service import SandboxNotFoundError, get_service
 
 logger = logging.getLogger(__name__)
+
+# Cap the size of tool output fed back to the model. Coding sub-agents
+# (gemini-2.5-flash) re-send the full accumulated message list on every step of
+# the read-run-fix loop, so unbounded exec output or whole-file dumps push the
+# cumulative input past the model's window (~1M tokens) after a few large tool
+# calls, and the API rejects the request. Keep the head + tail and elide the
+# middle so the model still sees the start and (usually most useful) end.
+_MAX_TOOL_OUTPUT_CHARS = int(os.getenv("SANDBOX_MAX_TOOL_OUTPUT_CHARS", "16000"))
+
+
+def _elide(text: Any, limit: int = _MAX_TOOL_OUTPUT_CHARS) -> Any:
+    """Truncate an oversized string to head+tail with an elision marker.
+
+    Non-strings and strings within ``limit`` are returned unchanged, so this is
+    safe to apply to any tool return value.
+    """
+    if not isinstance(text, str) or limit <= 0 or len(text) <= limit:
+        return text
+    head = limit // 2
+    tail = limit - head
+    elided = len(text) - limit
+    return (
+        text[:head]
+        + f"\n\n[... {elided} characters elided ({len(text)} total) ...]\n\n"
+        + text[-tail:]
+    )
+
+
+def _elide_result(result: Any) -> Any:
+    """Elide stdout/stderr of an exec-style result dict in place."""
+    if isinstance(result, dict):
+        for key in ("stdout", "stderr"):
+            if key in result:
+                result[key] = _elide(result[key])
+    return result
 
 # Safe characters for values embedded in a git command. owner/repo/dest are a
 # single path segment (no slash); ref (branch/tag/commit) may contain slashes.
@@ -47,6 +84,9 @@ class SandboxTools(Toolkit):
         # Last token written to the sandbox's ~/.gitconfig via ensure_git_auth().
         # "" means "decided to skip" (no token); None means "not yet provisioned".
         self._git_auth_token: Optional[str] = None
+        # Serializes sandbox creation/recreation so concurrent tool calls in one
+        # turn don't each spawn a fresh VM and clobber each other's cached id.
+        self._recreate_lock = asyncio.Lock()
         self._service = get_service()
 
         self.register(self.exec_command)
@@ -56,31 +96,61 @@ class SandboxTools(Toolkit):
         self.register(self.clone_repo)
 
     async def _get_sandbox(self) -> str:
-        """Get or create sandbox for this user."""
-        if self._sandbox_id is None:
+        """Get or create sandbox for this user (serialized)."""
+        async with self._recreate_lock:
+            if self._sandbox_id is None:
+                self._sandbox_id = await self._service.get_or_create_sandbox(
+                    self.user_id, self.project_id
+                )
+            return self._sandbox_id
+
+    async def _recreate_sandbox(self, failed_id: str) -> str:
+        """Drop a dead sandbox and create a fresh one (serialized).
+
+        ``failed_id`` is the id whose op just raised ``SandboxNotFoundError``.
+        If a concurrent tool call already recreated (cached id differs), reuse
+        that fresh sandbox instead of spawning yet another VM — this is what
+        stops the "created … / not found" churn under parallel tool calls.
+        """
+        async with self._recreate_lock:
+            if self._sandbox_id is not None and self._sandbox_id != failed_id:
+                return self._sandbox_id
+            self._service.clear_cache_for_user(self.user_id, self.project_id)
+            self._sandbox_id = None
+            # The fresh VM has no ~/.gitconfig — force re-provisioning of git auth.
+            self._git_auth_token = None
             self._sandbox_id = await self._service.get_or_create_sandbox(
                 self.user_id, self.project_id
             )
-        return self._sandbox_id
+            return self._sandbox_id
 
     async def _with_retry(self, op: Callable[[str], Awaitable[Any]]) -> Any:
         """Run a sandbox op, recreating the sandbox once if it was GC'd/destroyed.
 
         ``op`` receives the (possibly freshly created) sandbox id. A
         ``SandboxNotFoundError`` — raised on a 404 or a dead-state 5xx (see
-        service.py) — clears the cached id and retries once against a new sandbox.
+        service.py) — recreates the sandbox once and retries. If the retry also
+        fails, the poisoned id is cleared so the NEXT tool call starts clean
+        instead of recreating on every subsequent call (the old code left the
+        failed id cached, turning a transient outage into an infinite loop).
         """
+        sandbox_id = await self._get_sandbox()
         try:
-            sandbox_id = await self._get_sandbox()
             return await op(sandbox_id)
         except SandboxNotFoundError:
             logger.info("Sandbox was GC'd/destroyed, recreating...")
-            self._service.clear_cache_for_user(self.user_id, self.project_id)
-            self._sandbox_id = None
-            # The fresh VM has no ~/.gitconfig — force re-provisioning of git auth.
-            self._git_auth_token = None
-            sandbox_id = await self._get_sandbox()
+            sandbox_id = await self._recreate_sandbox(sandbox_id)
+        try:
             return await op(sandbox_id)
+        except SandboxNotFoundError:
+            async with self._recreate_lock:
+                if self._sandbox_id == sandbox_id:
+                    self._service.clear_cache_for_user(
+                        self.user_id, self.project_id
+                    )
+                    self._sandbox_id = None
+                    self._git_auth_token = None
+            raise
 
     async def _exec_with_retry(
         self, command: List[str], timeout: int = 60, stream: bool = False
@@ -179,7 +249,8 @@ class SandboxTools(Toolkit):
             command = ["sh", "-c", f"cd {working_dir} && {' '.join(command)}"]
 
         result = await self._exec_with_retry(command, timeout)
-        return result
+        # Bound stdout/stderr so a chatty command can't blow the model's context.
+        return _elide_result(result)
 
     async def upload_file(self, path: str, content: str) -> bool:
         """Upload a file to the sandbox.
@@ -204,9 +275,11 @@ class SandboxTools(Toolkit):
         Returns:
             File content as string
         """
-        return await self._with_retry(
+        content = await self._with_retry(
             lambda sid: self._service.download_file(sid, path)
         )
+        # A whole-file dump can be enormous; cap it before it reaches the model.
+        return _elide(content)
 
     async def list_files(self, path: str = "/workspace") -> List[Dict[str, Any]]:
         """List files in a directory.
@@ -275,8 +348,8 @@ class SandboxTools(Toolkit):
                 timeout=60,
             )
             if checkout.get("exit_code") != 0:
-                return checkout
-        return result
+                return _elide_result(checkout)
+        return _elide_result(result)
 
 
 def build(params: Dict[str, Any]) -> Toolkit:

@@ -18,7 +18,6 @@ from agno.learn import (
     LearnedKnowledgeConfig,
     LearningMachine,
     LearningMode,
-    SessionContextConfig,
     UserProfileConfig,
 )
 
@@ -194,14 +193,17 @@ def build_learning_machine(model, db, user_id: str, *, extract: bool) -> Learnin
     persist profile/entities after the turn, off the reply path.
     """
     mode = LearningMode.ALWAYS if extract else LearningMode.AGENTIC
+    # NOTE: `session_context` (SessionContextConfig) is intentionally NOT attached.
+    # Agno's SessionContextStore embeds the whole conversation into a single
+    # role="system" message; Gemini's formatter routes system messages into
+    # `system_instruction`, leaving `contents` empty, so every ALWAYS-mode
+    # extraction fails with "contents are required" (and AGENTIC logs a
+    # "only supports ALWAYS mode" warning). Session compression is handled
+    # separately via `enable_session_summaries`, so this store is redundant.
     return LearningMachine(
         db=db,
         model=model,
         user_profile=UserProfileConfig(mode=mode, instructions=PROFILE_INSTRUCTIONS),
-        # Short-term "what we're working on this session" memory (goals/plan/
-        # progress), keyed by session_id. Read on the reply path (AGENTIC), and
-        # extracted in the deferred job (ALWAYS) — same mode gating as the profile.
-        session_context=SessionContextConfig(mode=mode, enable_planning=True),
         entity_memory=EntityMemoryConfig(
             mode=mode,
             namespace=f"user:{user_id}:personal",

@@ -158,6 +158,32 @@ function flushPendingUpdates(
     });
 }
 
+// Statuses for which a background task is still in flight (and thus pinned in
+// the docked widget above the composer rather than left inline in the thread).
+const ACTIVE_TASK_STATUSES = ['planning', 'running', 'waiting_input', 'paused'];
+
+/**
+ * Zustand selector for the active background-task card of a chat, or undefined.
+ * Uses `.find` so it returns the stable `metadata` object reference (not a new
+ * array), keeping the default Object.is equality from re-rendering in a loop.
+ */
+export const selectActiveTaskProgress =
+    (chatId: string | null | undefined) =>
+    (s: ChatStore): Message['metadata'] | undefined => {
+        if (!chatId) return undefined;
+        const msgs = s.chats[chatId];
+        if (!msgs) return undefined;
+        const m = msgs.find(x => {
+            const md = x.metadata as any;
+            return (
+                md?.type === 'task_progress' &&
+                !md.finished &&
+                ACTIVE_TASK_STATUSES.includes(md.status)
+            );
+        });
+        return m?.metadata;
+    };
+
 export const useChatStore = create<ChatStore>()(
     persist(
         (set, get) => ({

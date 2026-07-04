@@ -121,6 +121,45 @@ function evictById(id: string): void {
   lastSeen.delete(id);
 }
 
+// Sandbox.create()/checkpoint-boot resolve BEFORE the VM can accept exec/file
+// ops. Returning 201 immediately makes the client's first op hit a dead-state
+// error → 404 → recreate, in a loop that spawns a new VM each round. Poll a
+// trivial exec until the box is actually usable before reporting it ready.
+const READY_TIMEOUT_MS = Number(process.env.SANDBOX_READY_TIMEOUT_MS ?? 60000);
+const READY_POLL_MS = Number(process.env.SANDBOX_READY_POLL_MS ?? 1000);
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Block until a freshly created/booted sandbox can run a command, or the
+ * deadline passes. Not-yet-ready symptoms (connection / dead-state / not-found)
+ * mean "keep waiting"; any other error means the box is reachable so we stop.
+ * Never throws — on timeout we return and let the normal op-level 404/recreate
+ * path handle a genuinely broken sandbox.
+ */
+async function waitUntilReady(sandbox: Sandbox): Promise<void> {
+  const deadline = Date.now() + READY_TIMEOUT_MS;
+  let attempt = 0;
+  for (;;) {
+    try {
+      await sandbox.exec("true", { timeoutSec: 5 });
+      return;
+    } catch (err) {
+      if (!isDeadSandbox(err) && !isNotFound(err)) {
+        console.error(`waitUntilReady ${sandbox.id}: unexpected error:`, err);
+        return;
+      }
+      if (Date.now() >= deadline) {
+        console.warn(
+          `waitUntilReady ${sandbox.id}: still not ready after ${READY_TIMEOUT_MS}ms`
+        );
+        return;
+      }
+      attempt++;
+      await sleep(Math.min(READY_POLL_MS * attempt, 3000));
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Checkpoints (workspace continuity)
 // ---------------------------------------------------------------------------
@@ -359,6 +398,9 @@ app.post(
     } else {
       sandbox = await Sandbox.create(createOpts);
     }
+    // Don't report the sandbox ready until it can actually run ops, or the
+    // client's first exec/file call will 404 and trigger the recreate loop.
+    await waitUntilReady(sandbox);
     userIndex.set(key, sandbox.id);
     const nowIso = new Date().toISOString();
     meta.set(sandbox.id, { userId, projectId, createdAt: nowIso });

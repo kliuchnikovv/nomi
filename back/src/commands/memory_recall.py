@@ -40,7 +40,7 @@ async def memory_recall(args: MemoryRecallArgs, ctx: CommandContext) -> CommandR
         hits = ctx.knowledge.search(
             query=args.query,
             filters={"user_id": ctx.user_id},
-            num_documents=args.limit,
+            max_results=args.limit,
         )
     except Exception:
         logger.exception("memory.recall search failed")

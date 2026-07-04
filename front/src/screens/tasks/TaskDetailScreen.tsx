@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     View,
     Text,
@@ -9,12 +9,15 @@ import {
     TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Markdown from 'react-native-markdown-display';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { tasksApi } from '../../apiClient';
+import { createMarkdownStyles } from '../chat/message/dynamicStyles';
+import { createMarkdownRules } from '../chat/message/markdownRules';
 import type {
     AgentTask,
     AgentTaskEvent,
@@ -81,6 +84,16 @@ export const TaskDetailScreen = () => {
     const { taskId } = route.params;
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+    const markdownRules = useMemo(
+        () =>
+            createMarkdownRules({
+                onCodeCopy: () => {},
+                onLinkPress: () => {},
+                onLinkCopy: () => {},
+            }),
+        [],
+    );
 
     const [task, setTask] = useState<AgentTask | null>(null);
     const [events, setEvents] = useState<AgentTaskEvent[]>([]);
@@ -413,14 +426,12 @@ export const TaskDetailScreen = () => {
                             >
                                 RESULT
                             </Text>
-                            <Text
-                                style={[
-                                    styles.result,
-                                    { color: theme.textPrimary },
-                                ]}
+                            <Markdown
+                                style={markdownStyles as any}
+                                rules={markdownRules}
                             >
                                 {task.result}
-                            </Text>
+                            </Markdown>
                         </View>
                     ) : null}
                 </ScrollView>
