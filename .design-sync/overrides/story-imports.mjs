@@ -252,8 +252,28 @@ export function storyImportPlugins({ PKG, GLOBAL, extraEntries = [], exported, c
     },
   };
 
+  // Nomi DS runs on react-native-web in the browser (the DS's Vite/Storybook
+  // both alias react-native → react-native-web). Bare `import from 'react-native'`
+  // in stories, decorators, and transitive theme sources (e.g. front/src/themes
+  // /tokens.ts imports Platform) must redirect the same way, or esbuild resolves
+  // to node_modules/react-native/index.js which is Flow and won't parse.
+  const rnAlias = {
+    name: 'react-native-to-web',
+    setup(b) {
+      b.onResolve({ filter: /^react-native$/ }, async (args) => {
+        if (args.pluginData === 'rn-alias-resolving') return null;
+        return b.resolve('react-native-web', {
+          kind: args.kind,
+          resolveDir: args.resolveDir,
+          importer: args.importer,
+          pluginData: 'rn-alias-resolving',
+        });
+      });
+    },
+  };
+
   return {
-    plugins: [dsShim, storybookStubPlugin(), consoleStub, policyRedirect],
+    plugins: [rnAlias, dsShim, storybookStubPlugin(), consoleStub, policyRedirect],
     loaders: { ...STORY_LOADERS, ...(force.loaders ?? {}) },
   };
 }

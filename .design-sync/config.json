@@ -3,6 +3,17 @@
     "shape": "storybook",
     "pkg": "packages/ds",
     "globalName": "GenieDS",
+    "entry": "./packages/ds/dist/index.js",
+    "buildCmd": "yarn workspace @genie/ds build",
     "storybookConfigDir": "packages/ds/.storybook",
-    "storybookStatic": ".design-sync/sb-reference"
+    "storybookStatic": ".design-sync/sb-reference",
+    "readmeHeader": ".design-sync/conventions.md",
+    "overrides": {
+        "Divider": { "cardMode": "column" },
+        "ListItem": { "cardMode": "column" }
+    },
+    "libOverrides": {
+        "story-imports.mjs": "alias react-native → react-native-web at preview compile time (stories, decorators, and themes/tokens.ts all import from 'react-native' which is Flow — the DS runs on RNW in the browser)",
+        "source-storybook.mjs": "same react-native → react-native-web alias applied inside the decorator bundle (uses a separate esbuild pipeline from previews)"
+    }
 }
