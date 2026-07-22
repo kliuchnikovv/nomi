@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
     View,
-    Text,
     StyleSheet,
     TouchableOpacity,
     Modal,
     Dimensions,
 } from 'react-native';
+import { Text } from '@genie/ds';
+import { useTheme } from '../../../context/ThemeContext';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -43,6 +44,7 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
     onComplete,
     onClose,
 }) => {
+    const { descriptor } = useTheme();
     const [step, setStep] = useState<'prompt' | 'rolling' | 'result'>('prompt');
     const [displayNumber, setDisplayNumber] = useState<number | string>('?');
     const [result, setResult] = useState<RollResult | null>(null);
@@ -80,7 +82,7 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
             sides = parseInt(match[2], 10);
             modifier = match[3] ? parseInt(match[3], 10) : 0;
         } else {
-            console.warn("Invalid dice expression, defaulting to 1d20");
+            console.warn('Invalid dice expression, defaulting to 1d20');
         }
 
         const rolls = [];
@@ -99,11 +101,14 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
         setStep('rolling');
 
         // Animation: Shake and rotate
-        rotation.value = withRepeat(withTiming(360, { duration: 500, easing: Easing.linear }), -1);
+        rotation.value = withRepeat(
+            withTiming(360, { duration: 500, easing: Easing.linear }),
+            -1,
+        );
         scale.value = withSequence(
             withTiming(1.2, { duration: 200 }),
             withTiming(0.9, { duration: 200 }),
-            withTiming(1.1, { duration: 200 })
+            withTiming(1.1, { duration: 200 }),
         );
 
         // Pre-calculate result
@@ -140,10 +145,13 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
         // Construct result message
         // "🎲 Result: 18 (Rolls: [15] + Mod: 3)"
         const rollsStr = `[${result.rolls.join(', ')}]`;
-        const modStr = result.modifier >= 0 ? `+${result.modifier}` : `${result.modifier}`;
-        const msg = `🎲 Result: ${result.total} (Rolls: ${rollsStr} ${modStr}${dc ? `, DC: ${dc}` : ''})`;
+        const modStr =
+            result.modifier >= 0 ? `+${result.modifier}` : `${result.modifier}`;
+        const msg = `🎲 Result: ${result.total} (Rolls: ${rollsStr} ${modStr}${
+            dc ? `, DC: ${dc}` : ''
+        })`;
 
-        opacity.value = withTiming(0, { duration: 300 }, (finished) => {
+        opacity.value = withTiming(0, { duration: 300 }, finished => {
             if (finished) {
                 runOnJS(onComplete)(msg);
             }
@@ -161,12 +169,42 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
                 strokeWidth="2"
             />
             {/* Inner Triangles - suggestive of D20 faces */}
-            <Polygon points="50,95 50,50 95,73" fill="#34495e" stroke="#ecf0f1" strokeWidth="1" />
-            <Polygon points="50,95 50,50 5,73" fill="#34495e" stroke="#ecf0f1" strokeWidth="1" />
-            <Polygon points="50,5 50,50 95,27" fill="#34495e" stroke="#ecf0f1" strokeWidth="1" />
-            <Polygon points="50,5 50,50 5,27" fill="#34495e" stroke="#ecf0f1" strokeWidth="1" />
-            <Polygon points="5,27 50,50 5,73" fill="#34495e" stroke="#ecf0f1" strokeWidth="1" />
-            <Polygon points="95,27 50,50 95,73" fill="#34495e" stroke="#ecf0f1" strokeWidth="1" />
+            <Polygon
+                points="50,95 50,50 95,73"
+                fill="#34495e"
+                stroke="#ecf0f1"
+                strokeWidth="1"
+            />
+            <Polygon
+                points="50,95 50,50 5,73"
+                fill="#34495e"
+                stroke="#ecf0f1"
+                strokeWidth="1"
+            />
+            <Polygon
+                points="50,5 50,50 95,27"
+                fill="#34495e"
+                stroke="#ecf0f1"
+                strokeWidth="1"
+            />
+            <Polygon
+                points="50,5 50,50 5,27"
+                fill="#34495e"
+                stroke="#ecf0f1"
+                strokeWidth="1"
+            />
+            <Polygon
+                points="5,27 50,50 5,73"
+                fill="#34495e"
+                stroke="#ecf0f1"
+                strokeWidth="1"
+            />
+            <Polygon
+                points="95,27 50,50 95,73"
+                fill="#34495e"
+                stroke="#ecf0f1"
+                strokeWidth="1"
+            />
         </Svg>
     );
 
@@ -174,9 +212,9 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
         return {
             transform: [
                 { scale: scale.value },
-                { rotate: `${rotation.value}deg` }
+                { rotate: `${rotation.value}deg` },
             ],
-            opacity: opacity.value
+            opacity: opacity.value,
         };
     });
 
@@ -190,17 +228,41 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
 
                 <View style={styles.content}>
                     {/* Header Text */}
-                    {step === 'prompt' && <Text style={styles.title}>Dice Check Required</Text>}
-                    {step === 'rolling' && <Text style={styles.title}>Rolling...</Text>}
+                    {step === 'prompt' && (
+                        <Text theme={descriptor} style={styles.title}>
+                            Dice Check Required
+                        </Text>
+                    )}
+                    {step === 'rolling' && (
+                        <Text theme={descriptor} style={styles.title}>
+                            Rolling...
+                        </Text>
+                    )}
                     {step === 'result' && result && (
-                        <Text style={[styles.title, result.success === true ? styles.success : result.success === false ? styles.failure : {}]}>
-                            {result.success === true ? 'SUCCESS!' : result.success === false ? 'FAILURE!' : 'RESULT'}
+                        <Text
+                            theme={descriptor}
+                            style={[
+                                styles.title,
+                                result.success === true
+                                    ? styles.success
+                                    : result.success === false
+                                    ? styles.failure
+                                    : {},
+                            ]}
+                        >
+                            {result.success === true
+                                ? 'SUCCESS!'
+                                : result.success === false
+                                ? 'FAILURE!'
+                                : 'RESULT'}
                         </Text>
                     )}
 
                     {/* DC info */}
                     {dc && step !== 'result' && (
-                        <Text style={styles.subtitle}>Difficulty Class: {dc}</Text>
+                        <Text theme={descriptor} style={styles.subtitle}>
+                            Difficulty Class: {dc}
+                        </Text>
                     )}
 
                     {/* The Dice */}
@@ -209,24 +271,41 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
                         onPress={step === 'prompt' ? handleRoll : undefined}
                         disabled={step !== 'prompt'}
                     >
-                        <Animated.View style={[styles.diceContainer, animatedStyle]}>
+                        <Animated.View
+                            style={[styles.diceContainer, animatedStyle]}
+                        >
                             <D20Icon />
                             <View style={styles.numberContainer}>
-                                <Text style={styles.numberText}>{displayNumber}</Text>
+                                <Text
+                                    theme={descriptor}
+                                    style={styles.numberText}
+                                >
+                                    {displayNumber}
+                                </Text>
                             </View>
                         </Animated.View>
                     </TouchableOpacity>
 
                     {/* Interaction Hint / Button */}
                     {step === 'prompt' && (
-                        <TouchableOpacity style={styles.button} onPress={handleRoll}>
-                            <Text style={styles.buttonText}>TAP TO ROLL</Text>
+                        <TouchableOpacity
+                            style={styles.button}
+                            onPress={handleRoll}
+                        >
+                            <Text theme={descriptor} style={styles.buttonText}>
+                                TAP TO ROLL
+                            </Text>
                         </TouchableOpacity>
                     )}
 
                     {step === 'result' && (
-                        <TouchableOpacity style={styles.button} onPress={handleContinue}>
-                            <Text style={styles.buttonText}>CONTINUE</Text>
+                        <TouchableOpacity
+                            style={styles.button}
+                            onPress={handleContinue}
+                        >
+                            <Text theme={descriptor} style={styles.buttonText}>
+                                CONTINUE
+                            </Text>
                         </TouchableOpacity>
                     )}
                 </View>

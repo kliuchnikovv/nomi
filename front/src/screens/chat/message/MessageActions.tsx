@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text } from '@genie/ds';
 import { MessageAction } from '../../main/models';
 import { ThemeColors } from '../../../themes/types';
+import { useTheme } from '../../../context/ThemeContext';
 
 interface MessageActionsProps {
     actions?: MessageAction[];
@@ -10,7 +12,13 @@ interface MessageActionsProps {
     onActionLongPress?: (action: MessageAction) => void;
 }
 
-export const MessageActions: React.FC<MessageActionsProps> = ({ actions, theme, onActionPress, onActionLongPress }) => {
+export const MessageActions: React.FC<MessageActionsProps> = ({
+    actions,
+    theme,
+    onActionPress,
+    onActionLongPress,
+}) => {
+    const { descriptor } = useTheme();
     if (!actions || actions.length === 0) {
         return null;
     }
@@ -26,12 +34,15 @@ export const MessageActions: React.FC<MessageActionsProps> = ({ actions, theme, 
                             backgroundColor: theme.surface,
                             borderColor: theme.border,
                             opacity: pressed ? 0.7 : 1,
-                        }
+                        },
                     ]}
                     onPress={() => onActionPress?.(action)}
                     onLongPress={() => onActionLongPress?.(action)}
                 >
-                    <Text style={[styles.label, { color: theme.textPrimary }]}>
+                    <Text
+                        theme={descriptor}
+                        style={[styles.label, { color: theme.textPrimary }]}
+                    >
                         {action.label}
                     </Text>
                 </Pressable>

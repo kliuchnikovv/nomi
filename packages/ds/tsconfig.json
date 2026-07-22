@@ -1,0 +1,11 @@
+{
+    "extends": "@react-native/typescript-config",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "@genie/front/*": ["../../front/src/*"]
+        }
+    },
+    "include": ["src/**/*.ts", "src/**/*.tsx"],
+    "exclude": ["node_modules"]
+}

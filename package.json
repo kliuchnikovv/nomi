@@ -5,7 +5,8 @@
   "description": "Genie AI Assistant Monorepo",
   "workspaces": [
     "front",
-    "plugins/*"
+    "plugins/*",
+    "packages/*"
   ],
   "scripts": {
     "front": "yarn workspace genie",

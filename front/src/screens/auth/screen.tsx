@@ -1,5 +1,15 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, Pressable, Keyboard, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
+import {
+    View,
+    TextInput,
+    Pressable,
+    Keyboard,
+    KeyboardAvoidingView,
+    ScrollView,
+    Platform,
+} from 'react-native';
+import { Text } from '@genie/ds';
+import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from './context.tsx';
 import { styles } from './styles.tsx';
 
@@ -10,6 +20,7 @@ export function AuthScreen() {
     const [name, setName] = useState('');
     const [focusedInput, setFocusedInput] = useState<string | null>(null);
     const { login, register, signInWithGoogle } = useAuth();
+    const { descriptor } = useTheme();
 
     const emailInputRef = useRef<TextInput>(null);
     const passwordInputRef = useRef<TextInput>(null);
@@ -30,22 +41,32 @@ export function AuthScreen() {
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
             <ScrollView
-                contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+                contentContainerStyle={{
+                    flexGrow: 1,
+                    justifyContent: 'center',
+                }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
             >
-                <Text style={styles.logo}>Nomi</Text>
-                <Text style={styles.subtitle}>Your AI Assistant</Text>
+                <Text theme={descriptor} style={styles.logo}>
+                    Nomi
+                </Text>
+                <Text theme={descriptor} style={styles.subtitle}>
+                    Your AI Assistant
+                </Text>
 
                 <View style={styles.formContainer}>
                     {/* Name Input (Register only) */}
                     {!isLogin && (
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Name</Text>
+                            <Text theme={descriptor} style={styles.label}>
+                                Name
+                            </Text>
                             <TextInput
                                 style={[
                                     styles.input,
-                                    focusedInput === 'name' && styles.inputFocused,
+                                    focusedInput === 'name' &&
+                                        styles.inputFocused,
                                 ]}
                                 placeholder="Enter your name"
                                 placeholderTextColor="rgba(192, 202, 245, 0.4)"
@@ -56,7 +77,9 @@ export function AuthScreen() {
                                 onFocus={() => setFocusedInput('name')}
                                 onBlur={() => setFocusedInput(null)}
                                 returnKeyType="next"
-                                onSubmitEditing={() => emailInputRef.current?.focus()}
+                                onSubmitEditing={() =>
+                                    emailInputRef.current?.focus()
+                                }
                                 blurOnSubmit={false}
                             />
                         </View>
@@ -64,7 +87,9 @@ export function AuthScreen() {
 
                     {/* Email Input */}
                     <View style={styles.inputContainer}>
-                        <Text style={styles.label}>Email</Text>
+                        <Text theme={descriptor} style={styles.label}>
+                            Email
+                        </Text>
                         <TextInput
                             ref={emailInputRef}
                             style={[
@@ -83,26 +108,33 @@ export function AuthScreen() {
                             onFocus={() => setFocusedInput('email')}
                             onBlur={() => setFocusedInput(null)}
                             returnKeyType="next"
-                            onSubmitEditing={() => passwordInputRef.current?.focus()}
+                            onSubmitEditing={() =>
+                                passwordInputRef.current?.focus()
+                            }
                             blurOnSubmit={false}
                         />
                     </View>
 
                     {/* Password Input */}
                     <View style={styles.inputContainer}>
-                        <Text style={styles.label}>Password</Text>
+                        <Text theme={descriptor} style={styles.label}>
+                            Password
+                        </Text>
                         <TextInput
                             ref={passwordInputRef}
                             style={[
                                 styles.input,
-                                focusedInput === 'password' && styles.inputFocused,
+                                focusedInput === 'password' &&
+                                    styles.inputFocused,
                             ]}
                             placeholder="Enter your password"
                             placeholderTextColor="rgba(192, 202, 245, 0.4)"
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry
-                            textContentType={isLogin ? 'password' : 'newPassword'}
+                            textContentType={
+                                isLogin ? 'password' : 'newPassword'
+                            }
                             autoComplete={isLogin ? 'password' : 'password-new'}
                             importantForAutofill="yes"
                             passwordRules="minlength: 8; required: lower; required: upper; required: digit; required: [-];"
@@ -121,7 +153,7 @@ export function AuthScreen() {
                         ]}
                         onPress={handleAuth}
                     >
-                        <Text style={styles.buttonText}>
+                        <Text theme={descriptor} style={styles.buttonText}>
                             {isLogin ? 'Login' : 'Create Account'}
                         </Text>
                     </Pressable>
@@ -137,12 +169,15 @@ export function AuthScreen() {
                             try {
                                 await signInWithGoogle();
                             } catch (error) {
-                                console.error("Google sign-in error:", error);
+                                console.error('Google sign-in error:', error);
                                 // Optionally, display an error message to the user
                             }
                         }}
                     >
-                        <Text style={styles.googleButtonText}>
+                        <Text
+                            theme={descriptor}
+                            style={styles.googleButtonText}
+                        >
                             Continue with Google
                         </Text>
                     </Pressable>
@@ -152,7 +187,10 @@ export function AuthScreen() {
                         style={styles.switchButton}
                         onPress={() => setIsLogin(!isLogin)}
                     >
-                        <Text style={styles.switchButtonText}>
+                        <Text
+                            theme={descriptor}
+                            style={styles.switchButtonText}
+                        >
                             {isLogin
                                 ? "Don't have an account? Register"
                                 : 'Already have an account? Login'}

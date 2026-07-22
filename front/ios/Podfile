@@ -122,5 +122,22 @@ target 'genie' do
         end
       end
     end
+
+    # fmt 11.0.2 + clang из Xcode 26.5: FMT_STRING на consteval-конструкторе
+    # basic_format_string не проходит constant-expression evaluation.
+    # Форсируем FMT_USE_CONSTEVAL=0 прямо в заголовке — pod xcconfig любые
+    # -D... на этом таргете съедает, а правка исходника гарантированно работает.
+    fmt_base = File.join(installer.sandbox.root, 'fmt', 'include', 'fmt', 'base.h')
+    if File.exist?(fmt_base)
+      content = File.read(fmt_base)
+      marker = '/* patched: force FMT_USE_CONSTEVAL=0 */'
+      unless content.include?(marker)
+        # В fmt 11.0.2 FMT_USE_CONSTEVAL задаётся безусловной цепочкой #if/#elif,
+        # поэтому ранний #define не работает. Меняем 1 → 0 прямо в исходнике.
+        patched = content.gsub(/(#\s*define\s+FMT_USE_CONSTEVAL\s+)1\b/, '\10')
+        File.chmod(0644, fmt_base)
+        File.write(fmt_base, "// #{marker}\n" + patched)
+      end
+    end
   end
 end

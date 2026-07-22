@@ -1,3 +1,9 @@
+import {
+    defaultMotion,
+    defaultRadius,
+    defaultSpacing,
+    defaultTypography,
+} from './tokens';
 import { ThemeDescriptor, ThemePalette } from './types';
 
 const palette: ThemePalette = {
@@ -8,7 +14,7 @@ const palette: ThemePalette = {
     cyan: '#56b6c2',
     blue: '#61afef',
     magenta: '#c678dd',
-    purple: '#c678dd',  // Same as magenta
+    purple: '#c678dd', // Same as magenta
     black: '#282c34',
     white: '#abb2bf',
     fg: '#abb2bf',
@@ -58,9 +64,13 @@ export const oneDarkTheme: ThemeDescriptor = {
         codeInlineBg: '#2c313a',
         codeText: palette.fg,
         // Blockquote colors
-        blockquoteBg: '#262b33',       // surfaceAlt
+        blockquoteBg: '#262b33', // surfaceAlt
         blockquoteBorder: palette.blue, // accent
     },
+    spacing: defaultSpacing,
+    radius: defaultRadius,
+    typography: defaultTypography,
+    motion: defaultMotion,
 };
 
 export const oneDark = oneDarkTheme.colors;

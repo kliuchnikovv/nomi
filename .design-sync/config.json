@@ -1,0 +1,8 @@
+{
+    "projectId": "02f93517-b6a4-447d-be07-e9ce7fb4c22d",
+    "shape": "storybook",
+    "pkg": "packages/ds",
+    "globalName": "GenieDS",
+    "storybookConfigDir": "packages/ds/.storybook",
+    "storybookStatic": ".design-sync/sb-reference"
+}

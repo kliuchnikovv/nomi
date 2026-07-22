@@ -6,17 +6,18 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp } from '@react-navigation/native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { useMain } from '../../main/context';
 import { useUpdates } from '../hooks/useUpdatesUnread';
 import type { RootTabParamList } from '../../../navigation/types';
 
 export function UpdatesInlineBanner() {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const navigation = useNavigation<NavigationProp<RootTabParamList>>();
     const { updatesChatId } = useMain();
     const { unreadCount } = useUpdates();
@@ -48,12 +49,22 @@ export function UpdatesInlineBanner() {
                 <Ionicons name="notifications" size={16} color={theme.accent} />
             </View>
             <Text
+                theme={descriptor}
+                variant="body"
+                weight="600"
                 style={[styles.label, { color: theme.textPrimary }]}
                 numberOfLines={1}
             >
                 {label}
             </Text>
-            <Text style={[styles.view, { color: theme.accent }]}>View</Text>
+            <Text
+                theme={descriptor}
+                variant="caption"
+                weight="600"
+                style={[styles.view, { color: theme.accent }]}
+            >
+                View
+            </Text>
             <Ionicons
                 name="chevron-forward"
                 size={16}

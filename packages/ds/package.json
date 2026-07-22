@@ -1,0 +1,33 @@
+{
+    "name": "@genie/ds",
+    "version": "0.0.1",
+    "private": true,
+    "description": "Nomi design system — primitives and tokens shared by the app.",
+    "main": "src/index.ts",
+    "types": "src/index.ts",
+    "exports": {
+        ".": "./src/index.ts",
+        "./tokens": "./src/tokens/index.ts",
+        "./components/*": "./src/components/*/index.ts"
+    },
+    "scripts": {
+        "build": "vite build",
+        "storybook": "storybook dev -p 6006",
+        "build-storybook": "storybook build",
+        "type-check": "tsc --noEmit -p ."
+    },
+    "peerDependencies": {
+        "react": "*",
+        "react-native": "*"
+    },
+    "devDependencies": {
+        "@storybook/addon-essentials": "^8.4.7",
+        "@storybook/react": "^8.4.7",
+        "@storybook/react-vite": "^8.4.7",
+        "@vitejs/plugin-react": "^4.3.4",
+        "react-dom": "19.1.0",
+        "react-native-web": "^0.19.13",
+        "storybook": "^8.4.7",
+        "vite": "^5.4.11"
+    }
+}

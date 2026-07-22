@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Modal, View, TouchableOpacity, StyleSheet } from 'react-native';
 import { NavArrowLeft, NavArrowRight } from 'iconoir-react-native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import {
     MONTHS_EN,
@@ -31,7 +32,7 @@ export function DatePickerModal({
     onConfirm,
     onCancel,
 }: Props) {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const [selected, setSelected] = useState(initialDate);
     const [viewYear, setViewYear] = useState(() => parseYMD(initialDate).y);
     const [viewMonth, setViewMonth] = useState(() => parseYMD(initialDate).m);
@@ -137,10 +138,11 @@ export function DatePickerModal({
                             />
                         </TouchableOpacity>
                         <Text
-                            style={[
-                                styles.monthLabel,
-                                { color: theme.textPrimary },
-                            ]}
+                            theme={descriptor}
+                            variant="body"
+                            tone="primary"
+                            weight="600"
+                            style={styles.monthLabel}
                         >
                             {MONTHS_EN[viewMonth]} {viewYear}
                         </Text>
@@ -165,10 +167,12 @@ export function DatePickerModal({
                         {WEEKDAYS_EN.map(w => (
                             <Text
                                 key={w}
-                                style={[
-                                    styles.weekday,
-                                    { color: theme.textSecondary },
-                                ]}
+                                theme={descriptor}
+                                variant="caption"
+                                tone="secondary"
+                                weight="600"
+                                align="center"
+                                style={styles.weekday}
                             >
                                 {w}
                             </Text>
@@ -180,7 +184,7 @@ export function DatePickerModal({
                             const isSelected = cell.date === selected;
                             const isToday = cell.date === today;
                             const textColor = isSelected
-                                ? '#fff'
+                                ? theme.background
                                 : cell.inMonth
                                 ? theme.textPrimary
                                 : theme.textSecondary;
@@ -209,6 +213,9 @@ export function DatePickerModal({
                                         ]}
                                     >
                                         <Text
+                                            theme={descriptor}
+                                            variant="body"
+                                            weight="500"
                                             style={[
                                                 styles.cellText,
                                                 { color: textColor },
@@ -233,10 +240,11 @@ export function DatePickerModal({
                             activeOpacity={0.7}
                         >
                             <Text
-                                style={[
-                                    styles.btnText,
-                                    { color: theme.textSecondary },
-                                ]}
+                                theme={descriptor}
+                                variant="body"
+                                tone="secondary"
+                                weight="600"
+                                style={styles.btnText}
                             >
                                 Cancel
                             </Text>
@@ -249,7 +257,15 @@ export function DatePickerModal({
                             onPress={() => onConfirm(selected)}
                             activeOpacity={0.7}
                         >
-                            <Text style={[styles.btnText, { color: '#fff' }]}>
+                            <Text
+                                theme={descriptor}
+                                variant="body"
+                                weight="600"
+                                style={[
+                                    styles.btnText,
+                                    { color: theme.background },
+                                ]}
+                            >
                                 Done
                             </Text>
                         </TouchableOpacity>
@@ -289,18 +305,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    monthLabel: {
-        fontSize: 17,
-        fontWeight: '600',
-    },
+    monthLabel: { fontSize: 17 },
     weekRow: {
         flexDirection: 'row',
     },
     weekday: {
         flex: 1,
-        textAlign: 'center',
-        fontSize: 12,
-        fontWeight: '600',
     },
     grid: {
         flexDirection: 'row',
@@ -319,10 +329,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    cellText: {
-        fontSize: 15,
-        fontWeight: '500',
-    },
+    cellText: { fontSize: 15 },
     actions: {
         flexDirection: 'row',
         gap: 12,
@@ -337,8 +344,5 @@ const styles = StyleSheet.create({
     cancelBtn: {
         borderWidth: 1,
     },
-    btnText: {
-        fontSize: 16,
-        fontWeight: '600',
-    },
+    btnText: { fontSize: 16 },
 });

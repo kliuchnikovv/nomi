@@ -1,3 +1,9 @@
+import {
+    defaultMotion,
+    defaultRadius,
+    defaultSpacing,
+    defaultTypography,
+} from './tokens';
 import { ThemeDescriptor, ThemePalette } from './types';
 
 const palette: ThemePalette = {
@@ -8,7 +14,7 @@ const palette: ThemePalette = {
     cyan: '#56b6c2',
     blue: '#61afef',
     magenta: '#c678dd',
-    purple: '#c678dd',  // Same as magenta
+    purple: '#c678dd', // Same as magenta
     black: '#1e2023',
     white: '#d1d0c5',
     fg: '#d1d0c5',
@@ -58,9 +64,13 @@ export const serikaDarkTheme: ThemeDescriptor = {
         codeInlineBg: '#3b3e42',
         codeText: palette.fg,
         // Blockquote colors
-        blockquoteBg: '#2c2e31',       // surfaceAlt
+        blockquoteBg: '#2c2e31', // surfaceAlt
         blockquoteBorder: palette.yellow, // accent
     },
+    spacing: defaultSpacing,
+    radius: defaultRadius,
+    typography: defaultTypography,
+    motion: defaultMotion,
 };
 
 export const serikaDark = serikaDarkTheme.colors;

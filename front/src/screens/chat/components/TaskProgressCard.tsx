@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
     View,
-    Text,
     StyleSheet,
     TouchableOpacity,
     TextInput,
@@ -13,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { tasksApi } from '../../../apiClient';
 import type { AgentTaskStatus, AgentTaskStep } from '../../main/models';
@@ -71,7 +71,7 @@ export const TaskProgressCard: React.FC<{
     /** Docked above the composer (pinned) rather than inline in the thread. */
     docked?: boolean;
 }> = ({ task, docked = false }) => {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const [busy, setBusy] = useState(false);
     const [steerText, setSteerText] = useState('');
     const [clarifyText, setClarifyText] = useState('');
@@ -158,7 +158,10 @@ export const TaskProgressCard: React.FC<{
     const header = (
         <View style={styles.headerRow}>
             <Ionicons name="construct" size={15} color={theme.accent} />
-            <Text style={[styles.headerLabel, { color: theme.textSecondary }]}>
+            <Text
+                theme={descriptor}
+                style={[styles.headerLabel, { color: theme.textSecondary }]}
+            >
                 Background task
             </Text>
             <View style={styles.headerSpacer} />
@@ -170,6 +173,7 @@ export const TaskProgressCard: React.FC<{
                     ]}
                 />
                 <Text
+                    theme={descriptor}
                     style={[styles.statusText, { color: theme.textSecondary }]}
                 >
                     {statusLabel(status)}
@@ -182,6 +186,7 @@ export const TaskProgressCard: React.FC<{
     const summary =
         task.goal || summaryLine ? (
             <Text
+                theme={descriptor}
                 style={[styles.summaryLine, { color: theme.textSecondary }]}
                 numberOfLines={2}
             >
@@ -201,6 +206,7 @@ export const TaskProgressCard: React.FC<{
             {plan.length > 0 && (
                 <View style={styles.plan}>
                     <Text
+                        theme={descriptor}
                         style={[styles.section, { color: theme.textSecondary }]}
                     >
                         {`STEPS ${doneCount}/${plan.length}`}
@@ -221,6 +227,7 @@ export const TaskProgressCard: React.FC<{
                                     color={color}
                                 />
                                 <Text
+                                    theme={descriptor}
                                     style={[
                                         styles.stepTitle,
                                         {
@@ -253,6 +260,7 @@ export const TaskProgressCard: React.FC<{
             {showApproval && (
                 <View style={[styles.approval, { borderColor: failColor }]}>
                     <Text
+                        theme={descriptor}
                         style={[
                             styles.approvalTitle,
                             { color: theme.textPrimary },
@@ -261,6 +269,7 @@ export const TaskProgressCard: React.FC<{
                         Approval needed
                     </Text>
                     <Text
+                        theme={descriptor}
                         style={[
                             styles.approvalBody,
                             { color: theme.textSecondary },
@@ -274,7 +283,10 @@ export const TaskProgressCard: React.FC<{
                             onPress={() => onApprove(false)}
                             style={[styles.btn, { borderColor: theme.border }]}
                         >
-                            <Text style={{ color: theme.textPrimary }}>
+                            <Text
+                                theme={descriptor}
+                                style={{ color: theme.textPrimary }}
+                            >
                                 Reject
                             </Text>
                         </TouchableOpacity>
@@ -286,7 +298,9 @@ export const TaskProgressCard: React.FC<{
                                 { backgroundColor: theme.accent },
                             ]}
                         >
-                            <Text style={{ color: '#fff' }}>Approve</Text>
+                            <Text theme={descriptor} style={{ color: '#fff' }}>
+                                Approve
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -312,7 +326,10 @@ export const TaskProgressCard: React.FC<{
                                         { borderColor: theme.border },
                                     ]}
                                 >
-                                    <Text style={{ color: theme.textPrimary }}>
+                                    <Text
+                                        theme={descriptor}
+                                        style={{ color: theme.textPrimary }}
+                                    >
                                         {option}
                                     </Text>
                                 </TouchableOpacity>

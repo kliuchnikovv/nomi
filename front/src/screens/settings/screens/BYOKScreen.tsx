@@ -24,7 +24,6 @@ const PROVIDERS: { id: BYOKProvider; label: string; placeholder: string }[] = [
     { id: 'anthropic', label: 'Anthropic (Claude)', placeholder: 'sk-ant-...' },
     { id: 'google', label: 'Google (Gemini)', placeholder: 'AIza...' },
     { id: 'openrouter', label: 'OpenRouter', placeholder: 'sk-or-...' },
-    { id: 'zai', label: 'Z.AI (GLM)', placeholder: 'API key' },
 ];
 
 export function BYOKScreen() {

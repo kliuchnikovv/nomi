@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 const isEmoji = (s?: string) =>
     !!s && /\p{Emoji}/u.test(s) && !/^[0-9#*]$/.test(s);
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { Card, ListItem, Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { useMain } from '../../main/context';
 import { Chat } from '../../main/models';
@@ -41,7 +42,7 @@ function formatRelativeTime(
 
 export function RecentSessionsWidget() {
     const navigation = useNavigation<NavigationProp<RootTabParamList>>();
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const { chats } = useMain();
 
     const toMs = (v: number | string) =>
@@ -56,107 +57,94 @@ export function RecentSessionsWidget() {
     );
 
     return (
-        <View
-            style={[
-                styles.card,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
+        <Card
+            theme={descriptor}
+            padding="lg"
+            radius="lg"
+            bordered
+            style={styles.card}
         >
-            <Text style={[styles.header, { color: theme.textSecondary }]}>
-                Recent Sessions
+            <Text
+                theme={descriptor}
+                variant="caption"
+                tone="secondary"
+                weight="600"
+                style={styles.header}
+            >
+                RECENT SESSIONS
             </Text>
             {recentChats.length === 0 ? (
-                <Text style={[styles.empty, { color: theme.textSecondary }]}>
+                <Text
+                    theme={descriptor}
+                    variant="caption"
+                    tone="secondary"
+                    align="center"
+                    style={styles.empty}
+                >
                     No sessions yet
                 </Text>
             ) : (
                 recentChats.map((chat: Chat) => (
-                    <TouchableOpacity
+                    <ListItem
                         key={chat.id}
-                        style={styles.row}
+                        theme={descriptor}
+                        density="compact"
+                        title={chat.title || 'New Chat'}
                         onPress={() =>
                             navigation.navigate('Chat', {
                                 screen: 'ChatDetail',
                                 params: { chatId: chat.id },
                             })
                         }
-                        activeOpacity={0.7}
-                    >
-                        <View
-                            style={[
-                                styles.iconBg,
-                                { backgroundColor: theme.background },
-                            ]}
-                        >
-                            {isEmoji(chat.icon) ? (
-                                <Text style={{ fontSize: 16 }}>
-                                    {chat.icon}
-                                </Text>
-                            ) : (
-                                <Ionicons
-                                    name={getChatIcon(chat.icon) as any}
-                                    size={16}
-                                    color={theme.accent}
-                                />
-                            )}
-                        </View>
-                        <Text
-                            style={[styles.title, { color: theme.textPrimary }]}
-                            numberOfLines={1}
-                        >
-                            {chat.title || 'New Chat'}
-                        </Text>
-                        <Text
-                            style={[
-                                styles.time,
-                                { color: theme.textSecondary },
-                            ]}
-                        >
-                            {formatRelativeTime(chat.updated_at)}
-                        </Text>
-                    </TouchableOpacity>
+                        leftContent={
+                            <View
+                                style={[
+                                    styles.iconBg,
+                                    {
+                                        backgroundColor: theme.background,
+                                        borderRadius: descriptor.radius.sm,
+                                    },
+                                ]}
+                            >
+                                {isEmoji(chat.icon) ? (
+                                    <Text theme={descriptor} variant="body">
+                                        {chat.icon}
+                                    </Text>
+                                ) : (
+                                    <Ionicons
+                                        name={getChatIcon(chat.icon) as any}
+                                        size={16}
+                                        color={theme.accent}
+                                    />
+                                )}
+                            </View>
+                        }
+                        rightContent={
+                            <Text
+                                theme={descriptor}
+                                variant="caption"
+                                tone="secondary"
+                            >
+                                {formatRelativeTime(chat.updated_at)}
+                            </Text>
+                        }
+                        style={styles.row}
+                    />
                 ))
             )}
-        </View>
+        </Card>
     );
 }
 
 const styles = StyleSheet.create({
-    card: {
-        padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
-        gap: 8,
-    },
-    header: {
-        fontSize: 11,
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: 0.8,
-    },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
+    card: { gap: 4 },
+    header: { letterSpacing: 0.8 },
+    row: { paddingHorizontal: 0 },
     iconBg: {
         width: 28,
         height: 28,
-        borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    title: {
-        flex: 1,
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    time: {
-        fontSize: 12,
-    },
-    empty: {
-        fontSize: 13,
-        textAlign: 'center',
-        paddingVertical: 8,
-    },
+    empty: { paddingVertical: 8 },
 });

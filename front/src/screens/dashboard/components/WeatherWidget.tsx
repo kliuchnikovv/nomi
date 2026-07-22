@@ -1,7 +1,14 @@
 // front/src/screens/dashboard/components/WeatherWidget.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Linking, Platform } from 'react-native';
+import {
+    View,
+    StyleSheet,
+    TouchableOpacity,
+    Linking,
+    Platform,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Card, Spinner, Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { weatherApi } from '../../../apiClient';
 import { getStoredLocation } from '../../../services/location/locationService';
@@ -11,6 +18,8 @@ interface WeatherData {
     weathercode: number;
 }
 
+// Weather code → semantic icon+color mapping. Not DS tokens — these encode
+// meteorological semantics (sunny/cloudy/rainy/…) that don't map to app themes.
 function getWeatherIconAndColor(code: number) {
     if (code === 0) return { icon: 'sunny', color: '#FFB800' };
     if (code <= 3) return { icon: 'partly-sunny', color: '#F59E0B' };
@@ -22,7 +31,7 @@ function getWeatherIconAndColor(code: number) {
 }
 
 export function WeatherWidget() {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const [weather, setWeather] = useState<WeatherData | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -60,46 +69,57 @@ export function WeatherWidget() {
         }
     };
 
-    const weatherInfo = weather ? getWeatherIconAndColor(weather.weathercode) : null;
+    const weatherInfo = weather
+        ? getWeatherIconAndColor(weather.weathercode)
+        : null;
 
     return (
         <TouchableOpacity
-            style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={handlePress}
             activeOpacity={0.8}
+            style={{ flex: 1, borderRadius: descriptor.radius.lg }}
         >
-            {loading ? (
-                <ActivityIndicator size="small" color={theme.accent} />
-            ) : weather && weatherInfo ? (
-                <View style={styles.tempRow}>
-                    <Ionicons name={weatherInfo.icon as any} size={36} color={weatherInfo.color} />
-                    <Text style={[styles.temp, { color: theme.textPrimary }]}>
-                        {Math.round(weather.temperature)}°
-                    </Text>
-                </View>
-            ) : (
-                <Ionicons name="cloud-outline" size={32} color={theme.textSecondary} />
-            )}
+            <Card
+                theme={descriptor}
+                padding="lg"
+                radius="lg"
+                bordered
+                style={styles.card}
+            >
+                {loading ? (
+                    <Spinner theme={descriptor} size="sm" tone="accent" />
+                ) : weather && weatherInfo ? (
+                    <View style={styles.tempRow}>
+                        <Ionicons
+                            name={weatherInfo.icon as any}
+                            size={36}
+                            color={weatherInfo.color}
+                        />
+                        <Text
+                            theme={descriptor}
+                            variant="display"
+                            tone="primary"
+                            weight="700"
+                        >
+                            {Math.round(weather.temperature)}°
+                        </Text>
+                    </View>
+                ) : (
+                    <Ionicons
+                        name="cloud-outline"
+                        size={32}
+                        color={theme.textSecondary}
+                    />
+                )}
+            </Card>
         </TouchableOpacity>
     );
 }
 
 const styles = StyleSheet.create({
     card: {
-        flex: 1,
-        padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    tempRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    temp: {
-        fontSize: 32,
-        fontWeight: '700',
-    },
+    tempRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 });

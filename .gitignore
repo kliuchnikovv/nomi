@@ -41,3 +41,12 @@ docs
 # z.ai diagnostic captures (env-gated payload dumps)
 back/scripts/zai_dumps/
 back/scripts/zai_payload.json
+
+# design-sync
+.design-sync/sb-reference/
+.design-sync/learnings/
+.design-sync/.cache/
+.design-sync/node_modules
+.ds-sync/
+ds-bundle/
+*.log

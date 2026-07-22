@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Text } from '@genie/ds';
+import { useTheme } from '../../../context/ThemeContext';
 
 interface Props {
     recap: string;
@@ -22,6 +24,7 @@ export function ChatRecapBanner({
     borderColor,
 }: Props) {
     const [expanded, setExpanded] = useState(false);
+    const { descriptor } = useTheme();
 
     return (
         <TouchableOpacity
@@ -41,10 +44,17 @@ export function ChatRecapBanner({
                 <Ionicons name="sparkles" size={16} color={accentColor} />
             </View>
             <View style={styles.text}>
-                <Text style={[styles.label, { color: textSecondaryColor }]}>
+                <Text
+                    theme={descriptor}
+                    variant="caption"
+                    weight="500"
+                    style={[styles.label, { color: textSecondaryColor }]}
+                >
                     Recap
                 </Text>
                 <Text
+                    theme={descriptor}
+                    variant="body"
                     style={[styles.recap, { color: textPrimaryColor }]}
                     numberOfLines={expanded ? undefined : 3}
                 >

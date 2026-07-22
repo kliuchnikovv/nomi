@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { useChat } from '../context';
 import { Check } from 'iconoir-react-native';
@@ -11,14 +12,14 @@ interface PollProps {
 }
 
 export function PollComponent({ question, options, allowMultiple }: PollProps) {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const { sendMessage } = useChat();
     const [selected, setSelected] = useState<string[]>([]);
     const [voted, setVoted] = useState(false);
 
     const handleSelect = (option: string) => {
         if (voted) return;
-        
+
         if (allowMultiple) {
             if (selected.includes(option)) {
                 setSelected(selected.filter(s => s !== option));
@@ -35,13 +36,32 @@ export function PollComponent({ question, options, allowMultiple }: PollProps) {
 
     const submitVote = () => {
         if (selected.length === 0) return;
-        sendMessage(`I vote for: ${selected.join(', ')}`, [], false, undefined, 'user');
+        sendMessage(
+            `I vote for: ${selected.join(', ')}`,
+            [],
+            false,
+            undefined,
+            'user',
+        );
         setVoted(true);
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.card || theme.surface, borderColor: theme.border }]}>
-            <Text style={[styles.question, { color: theme.text }]}>{question}</Text>
+        <View
+            style={[
+                styles.container,
+                {
+                    backgroundColor: theme.card || theme.surface,
+                    borderColor: theme.border,
+                },
+            ]}
+        >
+            <Text
+                theme={descriptor}
+                style={[styles.question, { color: theme.text }]}
+            >
+                {question}
+            </Text>
             {options.map((option, index) => {
                 const isSelected = selected.includes(option);
                 return (
@@ -51,34 +71,61 @@ export function PollComponent({ question, options, allowMultiple }: PollProps) {
                         disabled={voted}
                         style={({ pressed }) => [
                             styles.optionButton,
-                            { 
-                                backgroundColor: isSelected ? theme.primary + '20' : theme.background,
-                                borderColor: isSelected ? theme.primary : theme.border,
-                                opacity: (voted && !isSelected) ? 0.6 : (pressed ? 0.8 : 1)
-                            }
+                            {
+                                backgroundColor: isSelected
+                                    ? theme.primary + '20'
+                                    : theme.background,
+                                borderColor: isSelected
+                                    ? theme.primary
+                                    : theme.border,
+                                opacity:
+                                    voted && !isSelected
+                                        ? 0.6
+                                        : pressed
+                                        ? 0.8
+                                        : 1,
+                            },
                         ]}
                     >
-                        <Text style={[
-                            styles.optionText, 
-                            { color: isSelected ? theme.primary : theme.text }
-                        ]}>
+                        <Text
+                            theme={descriptor}
+                            style={[
+                                styles.optionText,
+                                {
+                                    color: isSelected
+                                        ? theme.primary
+                                        : theme.text,
+                                },
+                            ]}
+                        >
                             {option}
                         </Text>
-                        {isSelected && <Check width={16} height={16} color={theme.primary} />}
+                        {isSelected && (
+                            <Check
+                                width={16}
+                                height={16}
+                                color={theme.primary}
+                            />
+                        )}
                     </Pressable>
                 );
             })}
-            
+
             {allowMultiple && !voted && (
                 <Pressable
                     onPress={submitVote}
                     disabled={selected.length === 0}
                     style={[
                         styles.submitButton,
-                        { backgroundColor: theme.primary, opacity: selected.length === 0 ? 0.5 : 1 }
+                        {
+                            backgroundColor: theme.primary,
+                            opacity: selected.length === 0 ? 0.5 : 1,
+                        },
                     ]}
                 >
-                    <Text style={styles.submitText}>Submit Vote</Text>
+                    <Text theme={descriptor} style={styles.submitText}>
+                        Submit Vote
+                    </Text>
                 </Pressable>
             )}
         </View>
@@ -91,7 +138,7 @@ interface ButtonsProps {
 }
 
 export function ButtonsComponent({ text, buttons }: ButtonsProps) {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const { sendMessage } = useChat();
     const [clicked, setClicked] = useState(false);
 
@@ -102,8 +149,21 @@ export function ButtonsComponent({ text, buttons }: ButtonsProps) {
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.card || theme.surface, borderColor: theme.border }]}>
-            <Text style={[styles.question, { color: theme.text }]}>{text}</Text>
+        <View
+            style={[
+                styles.container,
+                {
+                    backgroundColor: theme.card || theme.surface,
+                    borderColor: theme.border,
+                },
+            ]}
+        >
+            <Text
+                theme={descriptor}
+                style={[styles.question, { color: theme.text }]}
+            >
+                {text}
+            </Text>
             <View style={styles.buttonRow}>
                 {buttons.map((btn, index) => (
                     <Pressable
@@ -112,13 +172,18 @@ export function ButtonsComponent({ text, buttons }: ButtonsProps) {
                         disabled={clicked}
                         style={({ pressed }) => [
                             styles.actionButton,
-                            { 
+                            {
                                 backgroundColor: theme.primary,
-                                opacity: clicked ? 0.5 : (pressed ? 0.8 : 1)
-                            }
+                                opacity: clicked ? 0.5 : pressed ? 0.8 : 1,
+                            },
                         ]}
                     >
-                        <Text style={styles.actionButtonText}>{btn.label}</Text>
+                        <Text
+                            theme={descriptor}
+                            style={styles.actionButtonText}
+                        >
+                            {btn.label}
+                        </Text>
                     </Pressable>
                 ))}
             </View>
@@ -176,5 +241,5 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: '600',
         fontSize: 14,
-    }
+    },
 });

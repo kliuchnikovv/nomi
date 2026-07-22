@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useRef } from 'react';
 import {
     View,
-    Text,
     TouchableOpacity,
     TouchableWithoutFeedback,
     StyleSheet,
@@ -9,6 +8,7 @@ import {
     ScrollView,
     Linking,
 } from 'react-native';
+import { Text } from '@genie/ds';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     useNavigation,
@@ -66,7 +66,7 @@ function statusLabel(state: VoiceState, permissionError: boolean): string {
 }
 
 export function VoiceScreen() {
-    const { theme, palette } = useTheme();
+    const { theme, palette, descriptor } = useTheme();
     const insets = useSafeAreaInsets();
     const navigation = useNavigation();
     const route = useRoute<VoiceScreenRoute>();
@@ -162,6 +162,7 @@ export function VoiceScreen() {
                     pointerEvents="none"
                 >
                     <Text
+                        theme={descriptor}
                         style={[
                             styles.headerTitle,
                             { color: theme.textPrimary },
@@ -170,6 +171,7 @@ export function VoiceScreen() {
                         Voice
                     </Text>
                     <Text
+                        theme={descriptor}
                         style={[
                             styles.headerStatus,
                             { color: theme.textSecondary },
@@ -197,6 +199,7 @@ export function VoiceScreen() {
                                 ]}
                             >
                                 <Text
+                                    theme={descriptor}
                                     style={[
                                         styles.liveTranscript,
                                         { color: theme.textPrimary },
@@ -216,6 +219,7 @@ export function VoiceScreen() {
                                 ]}
                             >
                                 <Text
+                                    theme={descriptor}
                                     style={[
                                         styles.settingsBtnText,
                                         { color: palette.white },

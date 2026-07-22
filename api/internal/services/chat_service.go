@@ -9,7 +9,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/storage/repositories"
 )
 
-const defaultPersistentChatModel = "glm-5.1"
+const defaultPersistentChatModel = "gemini-2.5-flash"
 
 // ChatService contains business logic for chat operations
 type ChatService struct {

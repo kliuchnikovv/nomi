@@ -1,8 +1,10 @@
 import React from 'react';
-import { TouchableOpacity, Image, View, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, Image, View, StyleSheet } from 'react-native';
 import { EmptyPage } from 'iconoir-react-native';
+import { Text } from '@genie/ds';
 import { Attachment } from '../../main/models';
 import { ThemeColors } from '../../../themes/types';
+import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../auth/context';
 import { getApiUrl, API_URL } from '../../../config';
 
@@ -21,6 +23,7 @@ export const AttachmentItem: React.FC<AttachmentItemProps> = ({
 }) => {
     const isImage = attachment.file_type?.startsWith('image/');
     const { token } = useAuth();
+    const { descriptor } = useTheme();
 
     // Helper to format source for Image
     const getImageSource = () => {
@@ -33,7 +36,11 @@ export const AttachmentItem: React.FC<AttachmentItemProps> = ({
                 return { uri: attachment.content };
             }
             // Add prefix if missing
-            return { uri: `data:${attachment.file_type || 'image/png'};base64,${attachment.content}` };
+            return {
+                uri: `data:${attachment.file_type || 'image/png'};base64,${
+                    attachment.content
+                }`,
+            };
         }
         if (attachment.id) {
             const url = `${getApiUrl()}/attachments/${attachment.id}`;
@@ -41,8 +48,8 @@ export const AttachmentItem: React.FC<AttachmentItemProps> = ({
             return {
                 uri: url,
                 headers: {
-                    Authorization: `Bearer ${token}`
-                }
+                    Authorization: `Bearer ${token}`,
+                },
             };
         }
         return undefined;
@@ -50,7 +57,10 @@ export const AttachmentItem: React.FC<AttachmentItemProps> = ({
 
     if (isImage) {
         return (
-            <TouchableOpacity onPress={() => onPress(attachment)} style={styles.imageContainer}>
+            <TouchableOpacity
+                onPress={() => onPress(attachment)}
+                style={styles.imageContainer}
+            >
                 <Image
                     source={getImageSource()}
                     style={[styles.image, { width: maxWidth, height: 150 }]}
@@ -63,16 +73,33 @@ export const AttachmentItem: React.FC<AttachmentItemProps> = ({
     return (
         <TouchableOpacity
             onPress={() => onPress(attachment)}
-            style={[styles.fileContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            style={[
+                styles.fileContainer,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
         >
-            <View style={[styles.iconContainer, { backgroundColor: theme.accent + '20' }]}>
+            <View
+                style={[
+                    styles.iconContainer,
+                    { backgroundColor: theme.accent + '20' },
+                ]}
+            >
                 <EmptyPage width={24} height={24} color={theme.accent} />
             </View>
             <View style={styles.fileInfo}>
-                <Text style={[styles.fileName, { color: theme.textPrimary }]} numberOfLines={1}>
+                <Text
+                    theme={descriptor}
+                    tone="primary"
+                    style={styles.fileName}
+                    numberOfLines={1}
+                >
                     {attachment.file_name}
                 </Text>
-                <Text style={[styles.fileSize, { color: theme.textSecondary }]}>
+                <Text
+                    theme={descriptor}
+                    tone="secondary"
+                    style={styles.fileSize}
+                >
                     {formatBytes(attachment.size)}
                 </Text>
             </View>

@@ -8,7 +8,6 @@ import React, {
 import {
     View,
     RefreshControl,
-    Text,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -18,6 +17,7 @@ import {
     TouchableWithoutFeedback,
     Keyboard,
 } from 'react-native';
+import { Text } from '@genie/ds';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -156,7 +156,7 @@ export function ChatDetailScreen() {
         setPendingInputText,
     } = useChat();
     const { user, token } = useAuth();
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const {
         activeChat,
         activeChatID,
@@ -854,7 +854,10 @@ export function ChatDetailScreen() {
                                     {chat.icon &&
                                     /\p{Emoji}/u.test(chat.icon) &&
                                     !/^[0-9#*]$/.test(chat.icon) ? (
-                                        <Text style={{ fontSize: 16 }}>
+                                        <Text
+                                            theme={descriptor}
+                                            style={{ fontSize: 16 }}
+                                        >
                                             {chat.icon}
                                         </Text>
                                     ) : (
@@ -867,6 +870,7 @@ export function ChatDetailScreen() {
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text
+                                        theme={descriptor}
                                         style={[
                                             detailStyles.dropdownTitle,
                                             { color: theme.text },
@@ -876,6 +880,7 @@ export function ChatDetailScreen() {
                                         {chat.title || 'New Chat'}
                                     </Text>
                                     <Text
+                                        theme={descriptor}
                                         style={[
                                             detailStyles.dropdownDate,
                                             { color: theme.textSecondary },
@@ -895,6 +900,7 @@ export function ChatDetailScreen() {
                         ))}
                         {sortedChats.length === 0 && (
                             <Text
+                                theme={descriptor}
                                 style={[
                                     detailStyles.dropdownEmpty,
                                     { color: theme.textSecondary },
@@ -956,6 +962,7 @@ export function ChatDetailScreen() {
                 >
                     <View style={detailStyles.titleRow}>
                         <Text
+                            theme={descriptor}
                             style={[detailStyles.title, { color: theme.text }]}
                             numberOfLines={1}
                         >
@@ -972,6 +979,7 @@ export function ChatDetailScreen() {
                     </View>
                     {activeChat?.updated_at ? (
                         <Text
+                            theme={descriptor}
                             style={[
                                 detailStyles.subtitle,
                                 { color: theme.textSecondary },
@@ -1098,6 +1106,7 @@ export function ChatDetailScreen() {
                     ]}
                 >
                     <Text
+                        theme={descriptor}
                         style={[
                             detailStyles.historySeparatorText,
                             { color: theme.textSecondary },

@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import Clipboard from '@react-native-clipboard/clipboard';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
+import type { ThemeDescriptor } from '../../../themes/types';
 import { createStyles, createMarkdownStyles } from './dynamicStyles';
 import { createMarkdownRules } from './markdownRules';
 
@@ -109,6 +111,7 @@ type SyntaxColors = {
 function renderHighlightedJson(
     jsonText: string,
     colors: SyntaxColors,
+    descriptor: ThemeDescriptor,
 ): React.ReactNode {
     const baseColor = colors.base;
 
@@ -121,7 +124,11 @@ function renderHighlightedJson(
     while ((match = JSON_TOKEN.exec(jsonText)) !== null) {
         if (match.index > lastIndex) {
             nodes.push(
-                <Text key={key++} style={{ color: baseColor }}>
+                <Text
+                    theme={descriptor}
+                    key={key++}
+                    style={{ color: baseColor }}
+                >
                     {jsonText.slice(lastIndex, match.index)}
                 </Text>,
             );
@@ -133,6 +140,7 @@ function renderHighlightedJson(
             const isKey = !!keyColon;
             nodes.push(
                 <Text
+                    theme={descriptor}
                     key={key++}
                     style={{ color: isKey ? colors.key : colors.string }}
                 >
@@ -141,13 +149,21 @@ function renderHighlightedJson(
             );
         } else if (literalToken) {
             nodes.push(
-                <Text key={key++} style={{ color: colors.literal }}>
+                <Text
+                    theme={descriptor}
+                    key={key++}
+                    style={{ color: colors.literal }}
+                >
                     {token}
                 </Text>,
             );
         } else if (numberToken) {
             nodes.push(
-                <Text key={key++} style={{ color: colors.number }}>
+                <Text
+                    theme={descriptor}
+                    key={key++}
+                    style={{ color: colors.number }}
+                >
                     {token}
                 </Text>,
             );
@@ -158,7 +174,7 @@ function renderHighlightedJson(
 
     if (lastIndex < jsonText.length) {
         nodes.push(
-            <Text key={key++} style={{ color: baseColor }}>
+            <Text theme={descriptor} key={key++} style={{ color: baseColor }}>
                 {jsonText.slice(lastIndex)}
             </Text>,
         );
@@ -179,7 +195,7 @@ type ToolCallContentProps = {
  * - Highlights JSON cheaply with colored spans.
  */
 export function ToolCallContent({ value, label }: ToolCallContentProps) {
-    const { theme, palette } = useTheme();
+    const { theme, palette, descriptor } = useTheme();
     const styles = useMemo(
         () => createStyles(theme, palette),
         [theme, palette],
@@ -213,8 +229,12 @@ export function ToolCallContent({ value, label }: ToolCallContentProps) {
     let body: React.ReactNode;
     if (normalized.kind === 'json') {
         body = (
-            <Text style={styles.toolCallArgs}>
-                {renderHighlightedJson(normalized.text, syntaxColors)}
+            <Text theme={descriptor} style={styles.toolCallArgs}>
+                {renderHighlightedJson(
+                    normalized.text,
+                    syntaxColors,
+                    descriptor,
+                )}
             </Text>
         );
     } else if (hasMarkdown(normalized.text)) {
@@ -224,13 +244,18 @@ export function ToolCallContent({ value, label }: ToolCallContentProps) {
             </Markdown>
         );
     } else {
-        body = <Text style={styles.toolCallArgs}>{normalized.text}</Text>;
+        body = (
+            <Text theme={descriptor} style={styles.toolCallArgs}>
+                {normalized.text}
+            </Text>
+        );
     }
 
     return (
         <View style={label ? { marginTop: 4 } : undefined}>
             {label ? (
                 <Text
+                    theme={descriptor}
                     style={{
                         fontSize: 11,
                         fontWeight: '600',

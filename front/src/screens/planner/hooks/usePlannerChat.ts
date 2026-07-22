@@ -19,8 +19,8 @@ import { subscribeGenerationDone } from '../../../store/generationDoneStore';
 const STABLE_EMPTY_ARRAY: any[] = [];
 const PLANNER_CHAT_TITLE = 'Planner';
 const PLANNER_CHAT_MODE = 'agent';
-const DEFAULT_MODEL = 'glm-4.7';
-const DEFAULT_PROVIDER = 'z.ai';
+const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_PROVIDER = 'google';
 const PAGE_SIZE = 8;
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { XmarkCircle, RefreshDouble } from 'iconoir-react-native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 
 interface ErrorBannerProps {
@@ -18,7 +19,7 @@ export function ErrorBanner({
     theme,
     onChangeModel,
 }: ErrorBannerProps) {
-    const { effects } = useTheme();
+    const { effects, descriptor } = useTheme();
     if (!error) return null;
 
     const glassButton = {
@@ -44,6 +45,8 @@ export function ErrorBanner({
         >
             <View style={styles.content}>
                 <Text
+                    theme={descriptor}
+                    variant="body"
                     style={[styles.errorText, { color: theme.errorText }]}
                     numberOfLines={2}
                 >
@@ -61,6 +64,9 @@ export function ErrorBanner({
                             color={theme.errorText}
                         />
                         <Text
+                            theme={descriptor}
+                            variant="body"
+                            weight="600"
                             style={[
                                 styles.buttonText,
                                 { color: theme.errorText },
@@ -76,6 +82,9 @@ export function ErrorBanner({
                             activeOpacity={0.7}
                         >
                             <Text
+                                theme={descriptor}
+                                variant="body"
+                                weight="600"
                                 style={[
                                     styles.buttonText,
                                     { color: theme.textPrimary },

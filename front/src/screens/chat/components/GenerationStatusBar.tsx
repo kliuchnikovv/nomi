@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
+import { View, Animated, StyleSheet } from 'react-native';
+import { Text } from '@genie/ds';
+import { useTheme } from '../../../context/ThemeContext';
 
 type Props = {
     status: string | null;
@@ -17,6 +19,7 @@ const INTERVAL_MS = 80;
 function ElegantSpinner({ color }: { color: string }) {
     const [frame, setFrame] = useState(0);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const { descriptor } = useTheme();
 
     useEffect(() => {
         intervalRef.current = setInterval(() => {
@@ -27,7 +30,15 @@ function ElegantSpinner({ color }: { color: string }) {
         };
     }, []);
 
-    return <Text style={[styles.spinner, { color }]}>{FRAMES[frame]}</Text>;
+    return (
+        <Text
+            theme={descriptor}
+            variant="mono"
+            style={[styles.spinner, { color }]}
+        >
+            {FRAMES[frame]}
+        </Text>
+    );
 }
 
 export function GenerationStatusBar({ status, theme }: Props) {

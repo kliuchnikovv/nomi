@@ -6,13 +6,29 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Pressable, Linking, Alert } from 'react-native';
+import {
+    View,
+    TouchableOpacity,
+    StyleSheet,
+    Pressable,
+    Linking,
+    Alert,
+} from 'react-native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 
 export interface ContextItem {
     id: string;
-    sourceType: 'email' | 'document' | 'image' | 'task' | 'note' | 'calendar_event' | 'github_repo' | 'location';
+    sourceType:
+        | 'email'
+        | 'document'
+        | 'image'
+        | 'task'
+        | 'note'
+        | 'calendar_event'
+        | 'github_repo'
+        | 'location';
     title: string;
     preview?: string;
     metadata?: Record<string, any>;
@@ -30,7 +46,7 @@ export const ContextItemCard = ({
     onRemove,
     removable = true,
 }: ContextItemCardProps) => {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
 
     const getSourceDetails = () => {
         switch (item.sourceType) {
@@ -114,11 +130,17 @@ export const ContextItemCard = ({
     };
 
     // For GitHub repos, split owner/repo into separate display parts
-    const githubParts = item.sourceType === 'github_repo' && item.title.includes('/')
-        ? { owner: item.title.split('/')[0], repo: item.title.split('/')[1] }
-        : null;
+    const githubParts =
+        item.sourceType === 'github_repo' && item.title.includes('/')
+            ? {
+                  owner: item.title.split('/')[0],
+                  repo: item.title.split('/')[1],
+              }
+            : null;
 
-    const displayName = githubParts ? truncateText(githubParts.repo) : truncateText(item.title);
+    const displayName = githubParts
+        ? truncateText(githubParts.repo)
+        : truncateText(item.title);
 
     if (item.sourceType === 'location') {
         const lat = item.metadata?.lat;
@@ -126,22 +148,44 @@ export const ContextItemCard = ({
         const address = item.metadata?.address ?? item.title;
         return (
             <Pressable
-                style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                style={[
+                    styles.container,
+                    {
+                        backgroundColor: theme.surface,
+                        borderColor: theme.border,
+                    },
+                ]}
                 onPress={() => {
                     if (lat != null && lon != null) {
-                        Linking.openURL(`maps://?ll=${lat},${lon}&q=${encodeURIComponent(item.title)}`).catch(() =>
-                            Linking.openURL(`https://maps.google.com/?q=${lat},${lon}`)
+                        Linking.openURL(
+                            `maps://?ll=${lat},${lon}&q=${encodeURIComponent(
+                                item.title,
+                            )}`,
+                        ).catch(() =>
+                            Linking.openURL(
+                                `https://maps.google.com/?q=${lat},${lon}`,
+                            ),
                         );
                     }
                 }}
                 onLongPress={() => Alert.alert(item.title, address)}
             >
                 <View style={styles.content}>
-                    <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
+                    <View
+                        style={[
+                            styles.iconContainer,
+                            { backgroundColor: `${color}15` },
+                        ]}
+                    >
                         <Ionicons name={icon} size={18} color={color} />
                     </View>
                     <View style={styles.textContent}>
-                        <Text style={[styles.title, { color: theme.textPrimary ?? theme.text }]} numberOfLines={2}>
+                        <Text
+                            theme={descriptor}
+                            tone="primary"
+                            style={styles.title}
+                            numberOfLines={2}
+                        >
                             {item.title}
                         </Text>
                     </View>
@@ -183,31 +227,29 @@ export const ContextItemCard = ({
                 </View>
                 <View style={styles.textContent}>
                     <Text
-                        style={[
-                            styles.title,
-                            { color: theme.textPrimary ?? theme.text },
-                        ]}
+                        theme={descriptor}
+                        tone="primary"
+                        style={styles.title}
                         numberOfLines={1}
                     >
                         {displayName}
                     </Text>
-                    {item.sourceType === 'calendar_event' && item.metadata?.start && (
-                        <Text
-                            style={[
-                                styles.subtitle,
-                                { color: theme.textSecondary },
-                            ]}
-                            numberOfLines={1}
-                        >
-                            {formatEventDate(item.metadata.start)}
-                        </Text>
-                    )}
+                    {item.sourceType === 'calendar_event' &&
+                        item.metadata?.start && (
+                            <Text
+                                theme={descriptor}
+                                tone="secondary"
+                                style={styles.subtitle}
+                                numberOfLines={1}
+                            >
+                                {formatEventDate(item.metadata.start)}
+                            </Text>
+                        )}
                     {githubParts && (
                         <Text
-                            style={[
-                                styles.subtitle,
-                                { color: theme.textSecondary },
-                            ]}
+                            theme={descriptor}
+                            tone="secondary"
+                            style={styles.subtitle}
                             numberOfLines={1}
                         >
                             {githubParts.owner}
@@ -230,7 +272,7 @@ export const ContextItemsList = ({
     onRemove,
     onClearAll,
 }: ContextItemsListProps) => {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
 
     if (items.length === 0) return null;
 
@@ -248,7 +290,9 @@ export const ContextItemsList = ({
                         style={styles.clearButton}
                     >
                         <Text
-                            style={[styles.clearText, { color: theme.primary }]}
+                            theme={descriptor}
+                            tone="accent"
+                            style={styles.clearText}
                         >
                             Clean
                         </Text>

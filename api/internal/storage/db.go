@@ -58,11 +58,11 @@ func New(cfg *config.Config) (*Storage, error) {
 		&GitHubAppInstallation{},
 		&AgentTask{},
 		// AgentTaskEvent carries a composite uniqueIndex on (task_id, seq)
-		// (idx_agent_task_events_task_seq) so event appends are idempotent.
-		// AutoMigrate creates it from the struct tags on a fresh column set, but
-		// it will NOT convert a pre-existing plain (non-unique) index — if an
-		// older deploy already had one, drop it once by hand so AutoMigrate can
-		// recreate it unique.
+		// (idx_agent_task_events_task_seq_v2) so event appends are idempotent.
+		// The index was renamed with a _v2 suffix because AutoMigrate won't
+		// retrofit uniqueness onto a pre-existing index of the same name — the
+		// original idx_agent_task_events_task_seq was created non-unique before
+		// this pair needed to be unique, and older deploys still have it that way.
 		&AgentTaskEvent{},
 		&UserAPIKey{},
 	); err != nil {

@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Check, NavArrowLeft } from 'iconoir-react-native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { ThemeName, themes } from '../../../themes';
 import { SettingsStackParamList } from '../../../navigation/types';
@@ -12,8 +13,7 @@ type Nav = NativeStackNavigationProp<SettingsStackParamList, 'ThemeScreen'>;
 
 export function ThemeScreen() {
     const navigation = useNavigation<Nav>();
-    const { theme, themeName, setTheme } = useTheme();
-    const palette = themes[themeName].palette;
+    const { theme, themeName, setTheme, descriptor } = useTheme();
     const insets = useSafeAreaInsets();
 
     const { darkThemes, lightThemes } = useMemo(() => {
@@ -34,24 +34,22 @@ export function ThemeScreen() {
                 header: {
                     flexDirection: 'row',
                     alignItems: 'center',
-                    paddingHorizontal: 16,
-                    paddingBottom: 12,
-                    gap: 8,
+                    paddingHorizontal: descriptor.spacing.lg,
+                    paddingBottom: descriptor.spacing.md,
+                    gap: descriptor.spacing.sm,
                 },
-                backBtn: { padding: 4 },
-                title: {
-                    fontSize: 24,
-                    fontWeight: '700',
-                    color: theme.textPrimary,
+                backBtn: { padding: descriptor.spacing.xs },
+                body: {
+                    paddingHorizontal: descriptor.spacing.lg,
+                    paddingTop: descriptor.spacing.sm,
                 },
-                body: { paddingHorizontal: 16, paddingTop: 8 },
                 option: {
                     flexDirection: 'row',
                     alignItems: 'center',
-                    paddingVertical: 14,
-                    paddingHorizontal: 16,
-                    borderRadius: 12,
-                    marginBottom: 8,
+                    paddingVertical: descriptor.spacing.md,
+                    paddingHorizontal: descriptor.spacing.lg,
+                    borderRadius: descriptor.radius.md,
+                    marginBottom: descriptor.spacing.sm,
                     borderWidth: 2,
                 },
                 optionSelected: {
@@ -66,28 +64,19 @@ export function ThemeScreen() {
                     width: 20,
                     height: 20,
                     borderRadius: 10,
-                    marginRight: 12,
+                    marginRight: descriptor.spacing.md,
                     borderWidth: StyleSheet.hairlineWidth,
                     borderColor: theme.border,
                 },
-                optionLabel: {
-                    flex: 1,
-                    fontSize: 16,
-                    fontWeight: '500',
-                    color: theme.textPrimary,
+                optionLabelBox: { flex: 1 },
+                sectionHeaderBox: {
+                    marginTop: descriptor.spacing.lg,
+                    marginBottom: descriptor.spacing.sm,
+                    paddingHorizontal: descriptor.spacing.xs,
                 },
-                sectionHeader: {
-                    fontSize: 13,
-                    fontWeight: '600',
-                    color: theme.textSecondary,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5,
-                    marginTop: 16,
-                    marginBottom: 8,
-                    paddingHorizontal: 4,
-                },
+                sectionHeaderSpacer: { marginTop: descriptor.spacing.xl },
             }),
-        [theme, palette],
+        [theme, descriptor],
     );
 
     return (
@@ -103,19 +92,36 @@ export function ThemeScreen() {
                         color={theme.textPrimary}
                     />
                 </Pressable>
-                <Text style={styles.title}>Theme</Text>
+                <Text
+                    theme={descriptor}
+                    variant="title"
+                    tone="primary"
+                    weight="700"
+                >
+                    Theme
+                </Text>
             </View>
             <ScrollView
                 style={styles.body}
-                contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+                contentContainerStyle={{
+                    paddingBottom: insets.bottom + descriptor.spacing.xl,
+                }}
             >
-                <Text style={styles.sectionHeader}>Dark</Text>
+                <View style={styles.sectionHeaderBox}>
+                    <Text
+                        theme={descriptor}
+                        variant="caption"
+                        tone="secondary"
+                        weight="600"
+                        style={{ letterSpacing: 0.5 }}
+                    >
+                        DARK
+                    </Text>
+                </View>
                 {darkThemes.map(t => (
                     <Pressable
                         key={t.value}
-                        onPress={() => {
-                            setTheme(t.value);
-                        }}
+                        onPress={() => setTheme(t.value)}
                         style={[
                             styles.option,
                             themeName === t.value
@@ -132,7 +138,16 @@ export function ThemeScreen() {
                                 },
                             ]}
                         />
-                        <Text style={styles.optionLabel}>{t.label}</Text>
+                        <View style={styles.optionLabelBox}>
+                            <Text
+                                theme={descriptor}
+                                variant="body"
+                                tone="primary"
+                                weight="500"
+                            >
+                                {t.label}
+                            </Text>
+                        </View>
                         {themeName === t.value && (
                             <Check
                                 width={18}
@@ -143,15 +158,26 @@ export function ThemeScreen() {
                     </Pressable>
                 ))}
 
-                <Text style={[styles.sectionHeader, { marginTop: 24 }]}>
-                    Light
-                </Text>
+                <View
+                    style={[
+                        styles.sectionHeaderBox,
+                        styles.sectionHeaderSpacer,
+                    ]}
+                >
+                    <Text
+                        theme={descriptor}
+                        variant="caption"
+                        tone="secondary"
+                        weight="600"
+                        style={{ letterSpacing: 0.5 }}
+                    >
+                        LIGHT
+                    </Text>
+                </View>
                 {lightThemes.map(t => (
                     <Pressable
                         key={t.value}
-                        onPress={() => {
-                            setTheme(t.value);
-                        }}
+                        onPress={() => setTheme(t.value)}
                         style={[
                             styles.option,
                             themeName === t.value
@@ -168,7 +194,16 @@ export function ThemeScreen() {
                                 },
                             ]}
                         />
-                        <Text style={styles.optionLabel}>{t.label}</Text>
+                        <View style={styles.optionLabelBox}>
+                            <Text
+                                theme={descriptor}
+                                variant="body"
+                                tone="primary"
+                                weight="500"
+                            >
+                                {t.label}
+                            </Text>
+                        </View>
                         {themeName === t.value && (
                             <Check
                                 width={18}

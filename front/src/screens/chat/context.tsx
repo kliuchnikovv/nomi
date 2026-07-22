@@ -634,7 +634,7 @@ export function ChatProvider({
                             'No model in history and none selected — picking first available',
                         );
                         setSelectedModel(
-                            availableModels[0]?.id || 'glm-5',
+                            availableModels[0]?.id || 'gemini-2.5-flash',
                             false,
                         );
                     } else {
@@ -685,7 +685,7 @@ export function ChatProvider({
                     `${getApiUrl()}/chats`,
                     {
                         title: title,
-                        model: selectedModelRef.current || 'glm-5',
+                        model: selectedModelRef.current || 'gemini-2.5-flash',
                         mode: chatMode,
                         team_id: teamIdToSend,
                         project_id: activeChat?.project_id ?? initialProjectId,
@@ -1157,7 +1157,7 @@ export function ChatProvider({
                     `${getApiUrl()}/chats`,
                     {
                         title: 'New Chat',
-                        model: selectedModelRef.current || 'glm-5',
+                        model: selectedModelRef.current || 'gemini-2.5-flash',
                         mode: 'agent',
                         type: 'persistent',
                     },
@@ -1493,7 +1493,9 @@ export function ChatProvider({
                     }
                     // Initialize provider ref for default model (or currently selected)
                     const current =
-                        selectedModelRef.current || models[0]?.id || 'glm-5';
+                        selectedModelRef.current ||
+                        models[0]?.id ||
+                        'gemini-2.5-flash';
                     selectedProviderRef.current = models.find(
                         m => m.id === current,
                     )?.provider;
@@ -2095,7 +2097,7 @@ export function ChatProvider({
                     `${getApiUrl()}/chats`,
                     {
                         title: 'New Chat',
-                        model: selectedModelRef.current || 'glm-5',
+                        model: selectedModelRef.current || 'gemini-2.5-flash',
                         mode: 'agent',
                         type: isNewSession ? 'persistent' : undefined,
                     },

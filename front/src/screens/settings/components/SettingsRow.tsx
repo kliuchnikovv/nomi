@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { NavArrowRight } from 'iconoir-react-native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { themes } from '../../../themes';
 import { createComponentStyles } from './settingsComponentStyles';
@@ -14,34 +15,57 @@ type Props = {
     isLast?: boolean;
 };
 
-export function SettingsRow({ label, value, onPress, destructive, isFirst, isLast }: Props) {
-    const { theme, themeName } = useTheme();
+export function SettingsRow({
+    label,
+    value,
+    onPress,
+    destructive,
+    isFirst,
+}: Props) {
+    const { theme, themeName, descriptor } = useTheme();
     const palette = themes[themeName].palette;
-    const styles = useMemo(() => createComponentStyles(theme, palette), [theme, palette]);
+    const styles = useMemo(
+        () => createComponentStyles(theme, palette),
+        [theme, palette],
+    );
 
     const content = (pressed: boolean) => (
         <>
             {!isFirst && <View style={styles.rowDivider} />}
             <View style={[styles.rowContainer, pressed && styles.pressedRow]}>
-                <Text style={destructive ? styles.rowLabelDestructive : styles.rowLabel} numberOfLines={1}>
+                <Text
+                    theme={descriptor}
+                    variant="body"
+                    tone={destructive ? 'error' : 'primary'}
+                    style={styles.rowLabel}
+                    numberOfLines={1}
+                >
                     {label}
                 </Text>
                 {value !== undefined && (
-                    <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>
+                    <Text
+                        theme={descriptor}
+                        variant="body"
+                        tone="secondary"
+                        style={styles.rowValue}
+                        numberOfLines={1}
+                    >
+                        {value}
+                    </Text>
                 )}
                 {onPress && (
-                    <NavArrowRight width={16} height={16} color={theme.fadedText} />
+                    <NavArrowRight
+                        width={16}
+                        height={16}
+                        color={theme.fadedText}
+                    />
                 )}
             </View>
         </>
     );
 
     if (!onPress) {
-        return (
-            <View>
-                {content(false)}
-            </View>
-        );
+        return <View>{content(false)}</View>;
     }
 
     return (

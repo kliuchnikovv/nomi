@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 
 interface PlaceholderWidgetProps {
@@ -8,7 +9,7 @@ interface PlaceholderWidgetProps {
 }
 
 export function PlaceholderWidget({ size, label }: PlaceholderWidgetProps) {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
 
     return (
         <View
@@ -18,12 +19,22 @@ export function PlaceholderWidget({ size, label }: PlaceholderWidgetProps) {
                 {
                     borderColor: theme.border,
                     backgroundColor: theme.surface,
+                    borderRadius: descriptor.radius.lg,
                 },
             ]}
         >
-            <Text style={[styles.plus, { color: theme.textSecondary }]}>+</Text>
+            <Text
+                theme={descriptor}
+                variant="title"
+                tone="secondary"
+                weight="300"
+            >
+                +
+            </Text>
             {label && (
-                <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text>
+                <Text theme={descriptor} variant="caption" tone="secondary">
+                    {label}
+                </Text>
             )}
         </View>
     );
@@ -33,23 +44,11 @@ const styles = StyleSheet.create({
     card: {
         borderWidth: 1,
         borderStyle: 'dashed',
-        borderRadius: 16,
         minHeight: 100,
         justifyContent: 'center',
         alignItems: 'center',
         gap: 4,
     },
-    half: {
-        flex: 1,
-    },
-    full: {
-        alignSelf: 'stretch',
-    },
-    plus: {
-        fontSize: 28,
-        fontWeight: '300',
-    },
-    label: {
-        fontSize: 12,
-    },
+    half: { flex: 1 },
+    full: { alignSelf: 'stretch' },
 });

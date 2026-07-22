@@ -15,7 +15,6 @@ var byokProviders = map[string]bool{
 	"anthropic":  true,
 	"google":     true,
 	"openrouter": true,
-	"zai":        true,
 }
 
 // BYOKHandler manages user-supplied LLM provider API keys (bring your own key).

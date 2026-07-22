@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
-    Text,
     FlatList,
     TouchableOpacity,
     StyleSheet,
@@ -12,9 +11,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Text } from '@genie/ds';
 import { chatsApi } from '../../../apiClient';
 import type { Chat } from '../../main/models';
 import { useMain } from '../../main/context';
+import { useTheme } from '../../../context/ThemeContext';
 
 interface Props {
     visible: boolean;
@@ -66,6 +67,7 @@ export function SessionHistorySheet({
     const [loading, setLoading] = useState(false);
     const insets = useSafeAreaInsets();
     const { renameChat, deleteChat } = useMain();
+    const { descriptor } = useTheme();
 
     const loadSessions = useCallback(() => {
         setLoading(true);
@@ -171,7 +173,9 @@ export function SessionHistorySheet({
                         ]}
                     >
                         {hasEmoji ? (
-                            <Text style={styles.iconEmoji}>{item.icon}</Text>
+                            <Text theme={descriptor} style={styles.iconEmoji}>
+                                {item.icon}
+                            </Text>
                         ) : (
                             <Ionicons
                                 name="sparkles"
@@ -183,6 +187,7 @@ export function SessionHistorySheet({
                     <View style={styles.textBlock}>
                         {hasTitle && (
                             <Text
+                                theme={descriptor}
                                 style={[
                                     styles.date,
                                     { color: textSecondaryColor },
@@ -192,6 +197,7 @@ export function SessionHistorySheet({
                             </Text>
                         )}
                         <Text
+                            theme={descriptor}
                             style={[styles.title, { color: textPrimaryColor }]}
                             numberOfLines={1}
                         >
@@ -237,6 +243,7 @@ export function SessionHistorySheet({
                     style={[styles.header, { borderBottomColor: borderColor }]}
                 >
                     <Text
+                        theme={descriptor}
                         style={[
                             styles.headerTitle,
                             { color: textPrimaryColor },
@@ -245,7 +252,10 @@ export function SessionHistorySheet({
                         Session History
                     </Text>
                     <TouchableOpacity onPress={onClose} hitSlop={8}>
-                        <Text style={[styles.closeBtn, { color: accentColor }]}>
+                        <Text
+                            theme={descriptor}
+                            style={[styles.closeBtn, { color: accentColor }]}
+                        >
                             Close
                         </Text>
                     </TouchableOpacity>
@@ -262,6 +272,7 @@ export function SessionHistorySheet({
                         renderItem={renderItem}
                         ListEmptyComponent={
                             <Text
+                                theme={descriptor}
                                 style={[
                                     styles.empty,
                                     { color: textSecondaryColor },

@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { defaultThemeName, themes, ThemeName, ThemeColors, ThemeEffects, ThemePalette } from '../themes';
+import {
+    defaultThemeName,
+    themes,
+    ThemeName,
+    ThemeColors,
+    ThemeEffects,
+    ThemePalette,
+} from '../themes';
+import type { ThemeDescriptor } from '../themes/types';
 
 interface ThemeContextType {
     theme: ThemeColors;
@@ -8,11 +16,14 @@ interface ThemeContextType {
     effects: ThemeEffects | undefined;
     themeName: ThemeName;
     setTheme: (name: ThemeName) => void;
+    descriptor: ThemeDescriptor;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
+    children,
+}) => {
     const [themeName, setThemeName] = useState<ThemeName>(defaultThemeName);
 
     useEffect(() => {
@@ -38,18 +49,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     };
 
-    const value = {
-        theme: themes[themeName].colors,
-        palette: themes[themeName].palette,
-        effects: themes[themeName].effects,
+    const active = themes[themeName];
+    const value: ThemeContextType = {
+        theme: active.colors,
+        palette: active.palette,
+        effects: active.effects,
         themeName,
         setTheme,
+        descriptor: active,
     };
 
     return (
-        <ThemeContext.Provider value={value}>
-            {children}
-        </ThemeContext.Provider>
+        <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
     );
 };
 

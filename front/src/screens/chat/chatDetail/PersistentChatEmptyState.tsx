@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text } from '@genie/ds';
+import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../auth/context';
 import { useConnectors } from '../../settings/connectors/context';
 
@@ -57,16 +59,30 @@ export function PersistentChatEmptyState({
     showChips = true,
 }: Props) {
     const { user } = useAuth();
+    const { descriptor } = useTheme();
     const chips = useChips(showChips);
     const firstName = user?.name?.split(' ')[0] ?? 'friend';
 
     return (
         <View style={styles.container}>
-            <Text style={styles.avatar}>✨</Text>
-            <Text style={[styles.greeting, { color: textPrimaryColor }]}>
+            <Text theme={descriptor} style={styles.avatar}>
+                ✨
+            </Text>
+            <Text
+                theme={descriptor}
+                variant="title"
+                weight="700"
+                align="center"
+                style={[styles.greeting, { color: textPrimaryColor }]}
+            >
                 Hello, {firstName}!
             </Text>
-            <Text style={[styles.subtitle, { color: textSecondaryColor }]}>
+            <Text
+                theme={descriptor}
+                variant="body"
+                align="center"
+                style={[styles.subtitle, { color: textSecondaryColor }]}
+            >
                 How can I help you today?
             </Text>
             {showChips && (
@@ -85,6 +101,9 @@ export function PersistentChatEmptyState({
                             activeOpacity={0.7}
                         >
                             <Text
+                                theme={descriptor}
+                                variant="body"
+                                weight="500"
                                 style={[
                                     styles.chipText,
                                     { color: textPrimaryColor },

@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Text } from '@genie/ds';
+import { useTheme } from '../../../context/ThemeContext';
 import type { Project } from '../../main/models';
 
 interface Props {
@@ -27,6 +29,7 @@ export function ProjectSuggestionBanner({
     borderColor,
     showNoButton = false,
 }: Props) {
+    const { descriptor } = useTheme();
     return (
         <View
             style={[
@@ -40,13 +43,23 @@ export function ProjectSuggestionBanner({
                     { backgroundColor: `${accentColor}20` },
                 ]}
             >
-                <Text style={styles.projectIcon}>{project.icon}</Text>
+                <Text theme={descriptor} style={styles.projectIcon}>
+                    {project.icon}
+                </Text>
             </View>
             <View style={styles.text}>
-                <Text style={[styles.label, { color: textSecondaryColor }]}>
+                <Text
+                    theme={descriptor}
+                    variant="caption"
+                    weight="500"
+                    style={[styles.label, { color: textSecondaryColor }]}
+                >
                     Add to project?
                 </Text>
                 <Text
+                    theme={descriptor}
+                    variant="body"
+                    weight="600"
                     style={[styles.name, { color: textPrimaryColor }]}
                     numberOfLines={1}
                 >
@@ -60,6 +73,9 @@ export function ProjectSuggestionBanner({
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                     <Text
+                        theme={descriptor}
+                        variant="body"
+                        weight="600"
                         style={[
                             styles.noBtnText,
                             { color: textSecondaryColor },
@@ -93,7 +109,14 @@ export function ProjectSuggestionBanner({
                     color="#fff"
                     style={styles.addIcon}
                 />
-                <Text style={styles.addBtnText}>Add</Text>
+                <Text
+                    theme={descriptor}
+                    variant="body"
+                    weight="700"
+                    style={styles.addBtnText}
+                >
+                    Add
+                </Text>
             </TouchableOpacity>
         </View>
     );

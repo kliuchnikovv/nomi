@@ -1,3 +1,9 @@
+import {
+    defaultMotion,
+    defaultRadius,
+    defaultSpacing,
+    defaultTypography,
+} from './tokens';
 import { ThemeDescriptor, ThemeEffects, ThemePalette } from './types';
 
 const palette: ThemePalette = {
@@ -95,6 +101,10 @@ export const darkMinimalTheme: ThemeDescriptor = {
         blockquoteBorder: '#6366F1',
     },
     effects,
+    spacing: defaultSpacing,
+    radius: defaultRadius,
+    typography: defaultTypography,
+    motion: defaultMotion,
 };
 
 export const darkMinimal = darkMinimalTheme.colors;

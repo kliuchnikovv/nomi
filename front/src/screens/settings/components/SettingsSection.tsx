@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { themes } from '../../../themes';
 import { createComponentStyles } from './settingsComponentStyles';
@@ -10,13 +11,24 @@ type Props = {
 };
 
 export function SettingsSection({ header, children }: Props) {
-    const { theme, themeName } = useTheme();
+    const { theme, themeName, descriptor } = useTheme();
     const palette = themes[themeName].palette;
-    const styles = useMemo(() => createComponentStyles(theme, palette), [theme, palette]);
+    const styles = useMemo(
+        () => createComponentStyles(theme, palette),
+        [theme, palette],
+    );
 
     return (
         <View>
-            <Text style={styles.sectionHeader}>{header}</Text>
+            <Text
+                theme={descriptor}
+                variant="caption"
+                tone="secondary"
+                weight="600"
+                style={styles.sectionHeader}
+            >
+                {header}
+            </Text>
             <View style={styles.sectionCard}>{children}</View>
         </View>
     );

@@ -1,3 +1,9 @@
+import {
+    defaultMotion,
+    defaultRadius,
+    defaultSpacing,
+    defaultTypography,
+} from './tokens';
 import { ThemeDescriptor, ThemePalette } from './types';
 
 const palette: ThemePalette = {
@@ -8,7 +14,7 @@ const palette: ThemePalette = {
     cyan: '#95e1d3',
     blue: '#59c2c9',
     magenta: '#d2a6ff',
-    purple: '#d2a6ff',  // Same as magenta for now
+    purple: '#d2a6ff', // Same as magenta for now
     white: '#e6e6e6',
     fg: '#b8c5d0',
     black: '#0f2027',
@@ -54,13 +60,17 @@ export const deepOceanTheme: ThemeDescriptor = {
         email: palette.magenta,
         task: palette.green,
         // Code colors
-        codeBg: '#152e33',           // darker surface for code blocks
-        codeInlineBg: '#1a3a3f',     // surface
-        codeText: palette.fg,        // readable code color
+        codeBg: '#152e33', // darker surface for code blocks
+        codeInlineBg: '#1a3a3f', // surface
+        codeText: palette.fg, // readable code color
         // Blockquote colors
-        blockquoteBg: '#152e33',     // surfaceAlt
+        blockquoteBg: '#152e33', // surfaceAlt
         blockquoteBorder: palette.cyan, // accent
     },
+    spacing: defaultSpacing,
+    radius: defaultRadius,
+    typography: defaultTypography,
+    motion: defaultMotion,
 };
 
 export const deepOcean = deepOceanTheme.colors;

@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Card, Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import type { DashboardStackParamList } from '../../../navigation/types';
 
@@ -15,57 +16,83 @@ export function TasksCard() {
         useNavigation<
             NativeStackNavigationProp<DashboardStackParamList, 'DashboardHome'>
         >();
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
 
     return (
         <TouchableOpacity
-            style={[
-                styles.card,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
             onPress={() => navigation.navigate('Tasks')}
             activeOpacity={0.8}
+            style={{ borderRadius: descriptor.radius.lg }}
         >
-            <View
-                style={[
-                    styles.iconBg,
-                    { backgroundColor: `${theme.accent}20` },
-                ]}
+            <Card
+                theme={descriptor}
+                padding="md"
+                radius="lg"
+                bordered
+                style={styles.row}
             >
-                <Ionicons
-                    name="rocket-outline"
-                    size={20}
-                    color={theme.accent}
-                />
-            </View>
-            <View style={styles.textBlock}>
-                <Text style={[styles.title, { color: theme.textPrimary }]}>
-                    Tasks
-                </Text>
-                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                    Background work Nomi runs for you
-                </Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.accent }]}>
-                <Text style={styles.badgeText}>View</Text>
-            </View>
+                <View
+                    style={[
+                        styles.iconBg,
+                        {
+                            backgroundColor: `${theme.accent}20`,
+                            borderRadius: descriptor.radius.md,
+                        },
+                    ]}
+                >
+                    <Ionicons
+                        name="rocket-outline"
+                        size={20}
+                        color={theme.accent}
+                    />
+                </View>
+                <View style={styles.textBlock}>
+                    <Text
+                        theme={descriptor}
+                        variant="body"
+                        tone="primary"
+                        weight="600"
+                    >
+                        Tasks
+                    </Text>
+                    <Text theme={descriptor} variant="caption" tone="secondary">
+                        Background work Nomi runs for you
+                    </Text>
+                </View>
+                <View
+                    style={[
+                        styles.badge,
+                        {
+                            backgroundColor: theme.accent,
+                            borderRadius: descriptor.radius.md,
+                            paddingHorizontal: descriptor.spacing.sm,
+                            paddingVertical: descriptor.spacing.xs,
+                        },
+                    ]}
+                >
+                    <Text
+                        theme={descriptor}
+                        variant="caption"
+                        weight="600"
+                        style={{ color: theme.background }}
+                    >
+                        View
+                    </Text>
+                </View>
+            </Card>
         </TouchableOpacity>
     );
 }
 
 const styles = StyleSheet.create({
-    card: {
+    row: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        padding: 14,
-        borderRadius: 16,
-        borderWidth: 1,
     },
     iconBg: {
         width: 40,
         height: 40,
-        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -73,21 +100,5 @@ const styles = StyleSheet.create({
         flex: 1,
         gap: 2,
     },
-    title: {
-        fontSize: 15,
-        fontWeight: '600',
-    },
-    subtitle: {
-        fontSize: 12,
-    },
-    badge: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    badgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#fff',
-    },
+    badge: {},
 });

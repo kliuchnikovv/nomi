@@ -1,9 +1,10 @@
 import React from 'react';
-import { Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 
 export function DateWidget() {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const now = new Date();
     const day = now.getDate();
     const month = now.toLocaleDateString('en-US', { month: 'long' });
@@ -12,12 +13,29 @@ export function DateWidget() {
 
     return (
         <TouchableOpacity
-            style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            style={[
+                styles.card,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
             onPress={openCalendar}
             activeOpacity={0.8}
         >
-            <Text style={[styles.day, { color: theme.textPrimary }]}>{day} </Text>
-            <Text style={[styles.month, { color: theme.textSecondary }]}>{month}</Text>
+            <Text
+                theme={descriptor}
+                variant="display"
+                tone="primary"
+                style={styles.dayGap}
+            >
+                {day}{' '}
+            </Text>
+            <Text
+                theme={descriptor}
+                variant="title"
+                tone="secondary"
+                weight="400"
+            >
+                {month}
+            </Text>
         </TouchableOpacity>
     );
 }
@@ -31,12 +49,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    day: {
-        fontSize: 28,
-        fontWeight: '700',
-    },
-    month: {
-        fontSize: 18,
-        fontWeight: '400',
+    dayGap: {
+        marginRight: 0,
     },
 });

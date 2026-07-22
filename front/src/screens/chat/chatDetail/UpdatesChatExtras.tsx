@@ -6,13 +6,8 @@
  */
 
 import React, { useState } from 'react';
-import {
-    View,
-    Text,
-    TouchableOpacity,
-    StyleSheet,
-    Linking,
-} from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import { Text } from '@genie/ds';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../../context/ThemeContext';
@@ -51,7 +46,7 @@ interface Props {
 }
 
 export function UpdatesChatExtras({ message, chatId }: Props) {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const { createNewChat, setPendingInitialMessage } = useMain();
     const navigation = useNavigation<NavProp>();
     const [dismissed, setDismissed] = useState(false);
@@ -125,7 +120,10 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
                     },
                 ]}
             >
-                <Text style={[styles.badgeText, { color: theme.accent }]}>
+                <Text
+                    theme={descriptor}
+                    style={[styles.badgeText, { color: theme.accent }]}
+                >
                     {label}
                 </Text>
             </View>
@@ -133,6 +131,7 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
             {/* Dismissed overlay */}
             {dismissed ? (
                 <Text
+                    theme={descriptor}
                     style={[
                         styles.dismissedText,
                         { color: theme.textSecondary },
@@ -153,6 +152,7 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
                             activeOpacity={0.8}
                         >
                             <Text
+                                theme={descriptor}
                                 style={[
                                     styles.dismissText,
                                     { color: theme.accent },
@@ -171,7 +171,9 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
                         onPress={handleDiscuss}
                         activeOpacity={0.8}
                     >
-                        <Text style={styles.discussText}>Discuss</Text>
+                        <Text theme={descriptor} style={styles.discussText}>
+                            Discuss
+                        </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[
@@ -183,6 +185,7 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
                         activeOpacity={0.8}
                     >
                         <Text
+                            theme={descriptor}
                             style={[
                                 styles.dismissText,
                                 { color: theme.textSecondary },

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { Card, Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 
 // Monday-first: M T W T F S S
@@ -20,7 +21,7 @@ function buildMonthGrid(year: number, month: number) {
 }
 
 export function CalendarWidget() {
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const today = new Date();
     const year = today.getFullYear();
     const month = today.getMonth();
@@ -33,85 +34,94 @@ export function CalendarWidget() {
 
     return (
         <TouchableOpacity
-            style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={openCalendar}
             activeOpacity={0.8}
+            style={{ flex: 1, borderRadius: descriptor.radius.lg }}
         >
-            <Text style={[styles.monthName, { color: theme.textSecondary }]}>
-                {monthName}
-            </Text>
+            <Card
+                theme={descriptor}
+                padding="md"
+                radius="lg"
+                bordered
+                style={styles.card}
+            >
+                <Text
+                    theme={descriptor}
+                    variant="caption"
+                    tone="secondary"
+                    weight="600"
+                    style={styles.monthName}
+                >
+                    {monthName.toUpperCase()}
+                </Text>
 
-            {/* Weekday headers */}
-            <View style={styles.weekRow}>
-                {WEEKDAYS.map((d, i) => (
-                    <Text key={i} style={[styles.weekday, { color: theme.textSecondary }]}>{d}</Text>
-                ))}
-            </View>
-
-            {/* Day grid */}
-            {weeks.map((week, wi) => (
-                <View key={wi} style={styles.weekRow}>
-                    {week.map((day, di) => {
-                        const isToday = day === todayDate;
-                        return (
-                            <View
-                                key={di}
-                                style={[
-                                    styles.dayCell,
-                                    isToday && { backgroundColor: theme.accent },
-                                ]}
+                <View style={styles.weekRow}>
+                    {WEEKDAYS.map((d, i) => (
+                        <View key={i} style={styles.weekdayCell}>
+                            <Text
+                                theme={descriptor}
+                                variant="caption"
+                                tone="secondary"
+                                weight="600"
+                                align="center"
+                                style={styles.tinyText}
                             >
-                                <Text
+                                {d}
+                            </Text>
+                        </View>
+                    ))}
+                </View>
+
+                {weeks.map((week, wi) => (
+                    <View key={wi} style={styles.weekRow}>
+                        {week.map((day, di) => {
+                            const isToday = day === todayDate;
+                            return (
+                                <View
+                                    key={di}
                                     style={[
-                                        styles.dayText,
-                                        { color: day ? (isToday ? '#fff' : theme.textPrimary) : 'transparent' },
+                                        styles.dayCell,
+                                        isToday && {
+                                            backgroundColor: theme.accent,
+                                        },
                                     ]}
                                 >
-                                    {day ?? 0}
-                                </Text>
-                            </View>
-                        );
-                    })}
-                </View>
-            ))}
+                                    <Text
+                                        theme={descriptor}
+                                        variant="caption"
+                                        align="center"
+                                        style={{
+                                            fontSize: 9,
+                                            color: day
+                                                ? isToday
+                                                    ? theme.background
+                                                    : theme.textPrimary
+                                                : 'transparent',
+                                        }}
+                                    >
+                                        {day ?? 0}
+                                    </Text>
+                                </View>
+                            );
+                        })}
+                    </View>
+                ))}
+            </Card>
         </TouchableOpacity>
     );
 }
 
 const styles = StyleSheet.create({
-    card: {
-        flex: 1,
-        padding: 12,
-        borderRadius: 16,
-        borderWidth: 1,
-        gap: 4,
-    },
-    monthName: {
-        fontSize: 11,
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        letterSpacing: 0.8,
-        marginBottom: 2,
-    },
-    weekRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    weekday: {
-        flex: 1,
-        fontSize: 9,
-        fontWeight: '600',
-        textAlign: 'center',
-    },
+    card: { gap: 4 },
+    monthName: { letterSpacing: 0.8, marginBottom: 2 },
+    weekRow: { flexDirection: 'row', justifyContent: 'space-between' },
+    weekdayCell: { flex: 1 },
+    tinyText: { fontSize: 9 },
     dayCell: {
         flex: 1,
         aspectRatio: 1,
         borderRadius: 100,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    dayText: {
-        fontSize: 9,
-        textAlign: 'center',
     },
 });

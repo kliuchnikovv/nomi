@@ -6,6 +6,8 @@
       "react-native-gifted-chat": ["src/types/gifted-chat-shim.d.ts"],
       "react-native-gifted-chat/*": ["src/types/gifted-chat-shim.d.ts"],
       "@genie/front/*": ["src/*"],
+      "@genie/ds": ["../packages/ds/src"],
+      "@genie/ds/*": ["../packages/ds/src/*"],
       "@genie/plugin-gmail": ["../plugins/gmail"],
       "@genie/plugin-gmail/*": ["../plugins/gmail/*"],
       "@genie/plugin-calendar": ["../plugins/calendar"],

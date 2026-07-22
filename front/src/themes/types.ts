@@ -88,6 +88,56 @@ export type ThemeEffects = {
     iconBgBorderColor: string;
 };
 
+export type ThemeSpacing = {
+    xs: number;
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    xxl: number;
+};
+
+export type ThemeRadius = {
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    pill: number;
+};
+
+export type TypographyVariant = {
+    fontFamily: string;
+    fontSize: number;
+    lineHeight: number;
+    fontWeight:
+        | 'normal'
+        | 'bold'
+        | '100'
+        | '200'
+        | '300'
+        | '400'
+        | '500'
+        | '600'
+        | '700'
+        | '800'
+        | '900';
+    letterSpacing?: number;
+};
+
+export type ThemeTypography = {
+    display: TypographyVariant;
+    title: TypographyVariant;
+    body: TypographyVariant;
+    caption: TypographyVariant;
+    mono: TypographyVariant;
+};
+
+export type ThemeMotion = {
+    fast: number;
+    base: number;
+    slow: number;
+};
+
 export type ThemeDescriptor = {
     id: ThemeName;
     name: string;
@@ -95,4 +145,8 @@ export type ThemeDescriptor = {
     palette: ThemePalette;
     colors: ThemeColors;
     effects?: ThemeEffects;
+    spacing: ThemeSpacing;
+    radius: ThemeRadius;
+    typography: ThemeTypography;
+    motion: ThemeMotion;
 };

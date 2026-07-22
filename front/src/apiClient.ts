@@ -651,7 +651,7 @@ export const entityApi = {
     list: () => apiClient.get<EntityEntry[]>(`${API_URL()}/user/entities`),
 };
 
-export type BYOKProvider = 'anthropic' | 'google' | 'openrouter' | 'zai';
+export type BYOKProvider = 'anthropic' | 'google' | 'openrouter';
 
 export interface BYOKProviderInfo {
     provider: BYOKProvider;

@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp } from '@react-navigation/native';
+import { Card, Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { useMain } from '../../main/context';
 import type { RootTabParamList } from '../../../navigation/types';
@@ -13,17 +14,13 @@ import type { RootTabParamList } from '../../../navigation/types';
  */
 export function UpdatesCard() {
     const navigation = useNavigation<NavigationProp<RootTabParamList>>();
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const { updatesChatId } = useMain();
 
     if (!updatesChatId) return null;
 
     return (
         <TouchableOpacity
-            style={[
-                styles.card,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
             onPress={() =>
                 navigation.navigate('Chat', {
                     screen: 'ChatDetail',
@@ -31,65 +28,76 @@ export function UpdatesCard() {
                 })
             }
             activeOpacity={0.8}
+            style={{ borderRadius: descriptor.radius.lg }}
         >
-            <View
-                style={[
-                    styles.iconBg,
-                    { backgroundColor: `${theme.accent}20` },
-                ]}
+            <Card
+                theme={descriptor}
+                padding="md"
+                radius="lg"
+                bordered
+                style={styles.row}
             >
-                <Ionicons name="notifications" size={20} color={theme.accent} />
-            </View>
-            <View style={styles.textBlock}>
-                <Text style={[styles.title, { color: theme.textPrimary }]}>
-                    Updates
-                </Text>
-                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                    Proactive messages from Nomi
-                </Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.accent }]}>
-                <Text style={styles.badgeText}>View</Text>
-            </View>
+                <View
+                    style={[
+                        styles.iconBg,
+                        {
+                            backgroundColor: `${theme.accent}20`,
+                            borderRadius: descriptor.radius.md,
+                        },
+                    ]}
+                >
+                    <Ionicons
+                        name="notifications"
+                        size={20}
+                        color={theme.accent}
+                    />
+                </View>
+                <View style={styles.textBlock}>
+                    <Text
+                        theme={descriptor}
+                        variant="body"
+                        tone="primary"
+                        weight="600"
+                    >
+                        Updates
+                    </Text>
+                    <Text theme={descriptor} variant="caption" tone="secondary">
+                        Proactive messages from Nomi
+                    </Text>
+                </View>
+                <View
+                    style={[
+                        styles.badge,
+                        {
+                            backgroundColor: theme.accent,
+                            borderRadius: descriptor.radius.md,
+                            paddingHorizontal: descriptor.spacing.sm,
+                            paddingVertical: descriptor.spacing.xs,
+                        },
+                    ]}
+                >
+                    <Text
+                        theme={descriptor}
+                        variant="caption"
+                        weight="600"
+                        style={{ color: theme.background }}
+                    >
+                        View
+                    </Text>
+                </View>
+            </Card>
         </TouchableOpacity>
     );
 }
 
 const styles = StyleSheet.create({
-    card: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        padding: 14,
-        borderRadius: 16,
-        borderWidth: 1,
-    },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     iconBg: {
         width: 40,
         height: 40,
-        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    textBlock: {
-        flex: 1,
-        gap: 2,
-    },
-    title: {
-        fontSize: 15,
-        fontWeight: '600',
-    },
-    subtitle: {
-        fontSize: 12,
-    },
-    badge: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    badgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#fff',
-    },
+    textBlock: { flex: 1, gap: 2 },
+    badge: {},
 });

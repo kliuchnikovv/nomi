@@ -12,7 +12,7 @@ import (
 )
 
 // defaultUpdatesChatModel is used when creating the per-user Updates chat.
-const defaultUpdatesChatModel = "glm-5.1"
+const defaultUpdatesChatModel = "gemini-2.5-flash"
 
 func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
 	// Default mode to 'agent' if not specified, or 'team' if team_id is present

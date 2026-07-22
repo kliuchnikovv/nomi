@@ -31,7 +31,6 @@ import {
     ActionSheetIOS,
     Keyboard,
     Pressable,
-    Text,
     TextInput,
     TouchableOpacity,
     View,
@@ -42,6 +41,7 @@ import {
     Alert,
     NativeModules,
 } from 'react-native';
+import { Text } from '@genie/ds';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from './styles.tsx';
 import { useChat } from '../context';
@@ -102,7 +102,7 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
     const navigation =
         useNavigation<NativeStackNavigationProp<ChatStackParamList>>();
 
-    const { theme, palette } = useTheme();
+    const { theme, palette, descriptor } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
     const {
@@ -766,6 +766,7 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                                         color={theme.text}
                                     />
                                     <Text
+                                        theme={descriptor}
                                         numberOfLines={1}
                                         style={{
                                             fontSize: 10,
@@ -829,7 +830,11 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                         pressed && styles.modelPillPressed,
                     ]}
                 >
-                    <Text style={styles.modelPillText} numberOfLines={1}>
+                    <Text
+                        theme={descriptor}
+                        style={styles.modelPillText}
+                        numberOfLines={1}
+                    >
                         {selectedModelName}
                     </Text>
                 </Pressable>
@@ -847,7 +852,11 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                             pressed && styles.modelPillPressed,
                         ]}
                     >
-                        <Text style={styles.thinkBadgeText} numberOfLines={1}>
+                        <Text
+                            theme={descriptor}
+                            style={styles.thinkBadgeText}
+                            numberOfLines={1}
+                        >
                             🧠{' '}
                             {thinkingLevel === 'medium' ? 'med' : thinkingLevel}
                         </Text>
@@ -867,7 +876,10 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                                 activeOpacity={0.7}
                                 style={[styles.modelPill, { flexShrink: 0 }]}
                             >
-                                <Text style={styles.modelPillText}>
+                                <Text
+                                    theme={descriptor}
+                                    style={styles.modelPillText}
+                                >
                                     {chip.label}
                                 </Text>
                             </TouchableOpacity>

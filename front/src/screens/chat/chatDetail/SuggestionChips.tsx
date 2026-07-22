@@ -1,5 +1,7 @@
 import React from 'react';
-import { ScrollView, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text } from '@genie/ds';
+import { useTheme } from '../../../context/ThemeContext';
 
 interface Props {
     suggestions: string[];
@@ -21,6 +23,7 @@ export function SuggestionChips({
     surfaceColor,
     textPrimaryColor,
 }: Props) {
+    const { descriptor } = useTheme();
     if (!suggestions.length) return null;
 
     return (
@@ -44,6 +47,9 @@ export function SuggestionChips({
                     activeOpacity={0.7}
                 >
                     <Text
+                        theme={descriptor}
+                        variant="body"
+                        weight="500"
                         style={[styles.chipText, { color: textPrimaryColor }]}
                         numberOfLines={1}
                     >

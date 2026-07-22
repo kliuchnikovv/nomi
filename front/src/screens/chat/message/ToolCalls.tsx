@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Pressable } from 'react-native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { createStyles, createMarkdownStyles } from './dynamicStyles';
 import Markdown from 'react-native-markdown-display';
@@ -18,7 +19,7 @@ const hasGlyph = (name?: string): boolean =>
 
 export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
     const [expanded, setExpanded] = useState(false);
-    const { theme, palette } = useTheme();
+    const { theme, palette, descriptor } = useTheme();
     const styles = useMemo(
         () => createStyles(theme, palette),
         [theme, palette],
@@ -37,8 +38,10 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
                     pressed && { opacity: 0.7 },
                 ]}
             >
-                <Text style={styles.toolCallsHeaderText}>Tool calls</Text>
-                <Text style={styles.toolCallsExpandIcon}>
+                <Text theme={descriptor} style={styles.toolCallsHeaderText}>
+                    Tool calls
+                </Text>
+                <Text theme={descriptor} style={styles.toolCallsExpandIcon}>
                     <NavArrowDown
                         width={12}
                         height={12}
@@ -55,7 +58,10 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
                 <View style={styles.toolCallsList}>
                     {toolCalls.map((toolCall, index) => (
                         <View key={index} style={styles.toolCallItem}>
-                            <Text style={styles.toolCallName}>
+                            <Text
+                                theme={descriptor}
+                                style={styles.toolCallName}
+                            >
                                 {toolCall.name === 'delegate_task_to_member'
                                     ? 'Delegating...'
                                     : toolCall.name}
@@ -80,7 +86,7 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
 // Single tool call component for inline rendering
 export function SingleToolCall({ toolCall }: { toolCall: any }) {
     const [expanded, setExpanded] = useState(false);
-    const { theme, palette } = useTheme();
+    const { theme, palette, descriptor } = useTheme();
     const styles = useMemo(
         () => createStyles(theme, palette),
         [theme, palette],
@@ -112,13 +118,17 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
                             style={{ marginRight: 6 }}
                         />
                     ) : null}
-                    <Text style={styles.singleToolCallName} numberOfLines={1}>
+                    <Text
+                        theme={descriptor}
+                        style={styles.singleToolCallName}
+                        numberOfLines={1}
+                    >
                         {toolCall.name === 'delegate_task_to_member'
                             ? 'Delegating...'
                             : toolCall.name}
                     </Text>
                 </View>
-                <Text style={styles.toolCallsExpandIcon}>
+                <Text theme={descriptor} style={styles.toolCallsExpandIcon}>
                     <NavArrowDown
                         width={12}
                         height={12}
@@ -151,7 +161,7 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
 // Reasoning block component for inline thinking display
 export function ReasoningBlock({ reasoning }: { reasoning: string }) {
     const [expanded, setExpanded] = useState(false);
-    const { theme, palette } = useTheme();
+    const { theme, palette, descriptor } = useTheme();
     const styles = useMemo(
         () => createStyles(theme, palette),
         [theme, palette],
@@ -181,9 +191,11 @@ export function ReasoningBlock({ reasoning }: { reasoning: string }) {
                         color={theme.textSecondary}
                         style={{ marginRight: 6 }}
                     />
-                    <Text style={styles.reasoningHeaderText}>Thinking...</Text>
+                    <Text theme={descriptor} style={styles.reasoningHeaderText}>
+                        Thinking...
+                    </Text>
                 </View>
-                <Text style={styles.toolCallsExpandIcon}>
+                <Text theme={descriptor} style={styles.toolCallsExpandIcon}>
                     <NavArrowDown
                         width={12}
                         height={12}
@@ -198,7 +210,9 @@ export function ReasoningBlock({ reasoning }: { reasoning: string }) {
             </Pressable>
             {expanded && (
                 <View style={styles.reasoningContent}>
-                    <Text style={styles.reasoningText}>{reasoning}</Text>
+                    <Text theme={descriptor} style={styles.reasoningText}>
+                        {reasoning}
+                    </Text>
                 </View>
             )}
         </View>
@@ -215,7 +229,7 @@ export function AgentThinkingBlock({
     text: string;
 }) {
     const [expanded, setExpanded] = useState(false);
-    const { theme, palette } = useTheme();
+    const { theme, palette, descriptor } = useTheme();
     const styles = useMemo(
         () => createStyles(theme, palette),
         [theme, palette],
@@ -247,11 +261,11 @@ export function AgentThinkingBlock({
                     pressed && { opacity: 0.7 },
                 ]}
             >
-                <Text style={styles.agentThinkingHeaderText}>
+                <Text theme={descriptor} style={styles.agentThinkingHeaderText}>
                     <Brain width={16} height={16} color={theme.textSecondary} />{' '}
                     Thinking
                 </Text>
-                <Text style={styles.toolCallsExpandIcon}>
+                <Text theme={descriptor} style={styles.toolCallsExpandIcon}>
                     <NavArrowDown
                         width={12}
                         height={12}
@@ -292,7 +306,7 @@ export function CollapsibleSteps({
     icon?: string;
 }) {
     const [expanded, setExpanded] = useState(defaultExpanded);
-    const { theme, palette } = useTheme();
+    const { theme, palette, descriptor } = useTheme();
     const styles = useMemo(
         () => createStyles(theme, palette),
         [theme, palette],
@@ -326,11 +340,14 @@ export function CollapsibleSteps({
                             style={{ marginRight: 6 }}
                         />
                     ) : null}
-                    <Text style={styles.collapsibleStepsHeaderText}>
+                    <Text
+                        theme={descriptor}
+                        style={styles.collapsibleStepsHeaderText}
+                    >
                         Details
                     </Text>
                 </View>
-                <Text style={styles.toolCallsExpandIcon}>
+                <Text theme={descriptor} style={styles.toolCallsExpandIcon}>
                     <NavArrowDown
                         width={12}
                         height={12}

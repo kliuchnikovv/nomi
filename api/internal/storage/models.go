@@ -198,10 +198,15 @@ type AgentTask struct {
 // writes these as it works so the client can replay the activity log.
 type AgentTaskEvent struct {
 	ID     uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	TaskID uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_agent_task_events_task_seq,priority:1" json:"task_id"`
+	TaskID uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_agent_task_events_task_seq_v2,priority:1" json:"task_id"`
 	// Seq orders events within a task (monotonic per task). (task_id, seq) is
 	// unique so appends are idempotent (a re-published event is a no-op).
-	Seq int `gorm:"not null;uniqueIndex:idx_agent_task_events_task_seq,priority:2" json:"seq"`
+	//
+	// The index is named _v2 because the original idx_agent_task_events_task_seq
+	// was created as a plain (non-unique) index before this column pair needed
+	// to be unique; AutoMigrate won't retrofit uniqueness onto an existing index
+	// of the same name, so the rename forces it to create a new unique one.
+	Seq int `gorm:"not null;uniqueIndex:idx_agent_task_events_task_seq_v2,priority:2" json:"seq"`
 	// Kind: 'plan_update' | 'step_started' | 'step_done' | 'log' | 'approval_request' | 'error' | 'done'.
 	Kind      string         `gorm:"type:text;not null" json:"kind"`
 	Payload   datatypes.JSON `gorm:"type:jsonb" json:"payload"`

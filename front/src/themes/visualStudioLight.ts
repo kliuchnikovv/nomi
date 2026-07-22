@@ -1,3 +1,9 @@
+import {
+    defaultMotion,
+    defaultRadius,
+    defaultSpacing,
+    defaultTypography,
+} from './tokens';
 import { ThemeDescriptor, ThemePalette } from './types';
 
 const palette: ThemePalette = {
@@ -8,7 +14,7 @@ const palette: ThemePalette = {
     cyan: '#0451a5',
     blue: '#0000ff',
     magenta: '#811f3f',
-    purple: '#af00db',  // Purple color for VS Light
+    purple: '#af00db', // Purple color for VS Light
     white: '#ffffff',
     fg: '#000000',
     black: '#000000',
@@ -54,9 +60,13 @@ export const visualStudioLightTheme: ThemeDescriptor = {
         email: '#EA4335',
         task: '#34A853',
         // Blockquote colors
-        blockquoteBg: '#f3f3f3',       // gutterGrey - subtle highlight
+        blockquoteBg: '#f3f3f3', // gutterGrey - subtle highlight
         blockquoteBorder: palette.cyan, // #0451a5 - accent for emphasis
     },
+    spacing: defaultSpacing,
+    radius: defaultRadius,
+    typography: defaultTypography,
+    motion: defaultMotion,
 };
 
 export const visualStudioLight = visualStudioLightTheme.colors;

@@ -5,10 +5,11 @@
  */
 
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp } from '@react-navigation/native';
+import { Text } from '@genie/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { useMain } from '../../main/context';
 import { useUpdates } from '../hooks/useUpdatesUnread';
@@ -16,7 +17,7 @@ import type { RootTabParamList } from '../../../navigation/types';
 
 export function UpdatesBellButton() {
     const navigation = useNavigation<NavigationProp<RootTabParamList>>();
-    const { theme } = useTheme();
+    const { theme, descriptor } = useTheme();
     const { updatesChatId } = useMain();
     const { unreadCount } = useUpdates();
 
@@ -42,7 +43,13 @@ export function UpdatesBellButton() {
             />
             {hasUnread && (
                 <View style={[styles.badge, { backgroundColor: theme.accent }]}>
-                    <Text style={styles.badgeText} numberOfLines={1}>
+                    <Text
+                        theme={descriptor}
+                        variant="caption"
+                        weight="700"
+                        style={styles.badgeText}
+                        numberOfLines={1}
+                    >
                         {badgeText}
                     </Text>
                 </View>
