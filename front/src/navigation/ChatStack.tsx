@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { ChatDetailScreen } from '../screens/chat/chatDetail/ChatDetailScreen';
-import { VoiceScreen } from '../screens/chat/voice/VoiceScreen';
 import { CommandScreen } from '../screens/chat/CommandScreen';
 import { useMain, emptyChatID } from '../screens/main/context';
 import { ChatProvider } from '../screens/chat/context';
@@ -43,14 +42,6 @@ export function ChatStack() {
                         name="ChatDetail"
                         component={ChatDetailScreenWrapper}
                         options={{ title: 'Chat' }}
-                    />
-                    <Stack.Screen
-                        name="VoiceScreen"
-                        component={VoiceScreen}
-                        options={{
-                            title: 'Voice',
-                            animation: 'slide_from_bottom',
-                        }}
                     />
                     <Stack.Screen
                         name="CommandScreen"

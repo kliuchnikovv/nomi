@@ -24,6 +24,10 @@ import Animated, {
     useAnimatedReaction,
     runOnJS,
     FadeIn,
+    withRepeat,
+    withSequence,
+    withTiming,
+    cancelAnimation,
 } from 'react-native-reanimated';
 import {
     KeyboardAvoidingView,
@@ -79,6 +83,9 @@ import { UpdatesChatExtras } from './UpdatesChatExtras';
 import { UpdatesInlineBanner } from './UpdatesInlineBanner';
 import { UpdatesBellButton } from '../components/UpdatesBellButton';
 import { useUpdates } from '../hooks/useUpdatesUnread';
+import { VoiceDock } from '../voice/VoiceDock';
+import { useVoiceConversation } from '../voice/useVoiceConversation';
+import type { VoiceState } from '../voice/useVoiceConversation';
 
 const FADE_OPACITIES = [
     0.816, 0.734, 0.653, 0.579, 0.506, 0.441, 0.383, 0.326, 0.277, 0.228, 0.18,
@@ -185,6 +192,30 @@ export function ChatDetailScreen() {
         [setPendingInputText, activeChatID],
     );
     const [dropdownVisible, setDropdownVisible] = useState(false);
+
+    // Voice mode is an in-screen swap between the text composer and the Voice
+    // dock (no navigation to a separate screen). The hook is mounted only
+    // while inputMode === 'voice' so mic/permission requests happen on entry
+    // and stop() runs on exit via unmount.
+    const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
+    const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+    const voiceInterruptRef = useRef<() => void>(() => {});
+    const enterVoice = useCallback(() => setInputMode('voice'), []);
+    const exitVoice = useCallback(() => setInputMode('text'), []);
+    // Tap anywhere in the thread while the assistant is speaking to barge in.
+    const handleThreadTap = useCallback(() => {
+        if (inputMode === 'voice' && voiceState === 'speaking') {
+            voiceInterruptRef.current();
+        }
+    }, [inputMode, voiceState]);
+    // Reset to text when switching chats so a stale voice session doesn't
+    // survive across sessions. Honor the `startVoice` param (e.g. from a
+    // voice deep-link) once per screen instance.
+    const routeStartVoice = Boolean((route.params as any)?.startVoice);
+    useEffect(() => {
+        setInputMode(routeStartVoice ? 'voice' : 'text');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [chatId]);
 
     const styles = useMemo(() => createStyles(theme), [theme]);
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
@@ -752,6 +783,10 @@ export function ChatDetailScreen() {
             ? followUps.map(t => ({ label: t, text: t }))
             : undefined,
         onChipPress: showEmptyChips ? handleChipPress : handleFollowUpPress,
+        onEnterVoice: enterVoice,
+        voiceSpeaking:
+            inputMode === 'voice' &&
+            (voiceState === 'speaking' || voiceState === 'processing'),
     });
 
     const isUpdatesChat = activeChat?.chat_type === 'updates';
@@ -977,7 +1012,12 @@ export function ChatDetailScreen() {
                             style={{ marginLeft: 4, marginTop: 1 }}
                         />
                     </View>
-                    {activeChat?.updated_at ? (
+                    {inputMode === 'voice' ? (
+                        <VoiceModeIndicator
+                            theme={theme}
+                            descriptor={descriptor}
+                        />
+                    ) : activeChat?.updated_at ? (
                         <Text
                             theme={descriptor}
                             style={[
@@ -1125,6 +1165,11 @@ export function ChatDetailScreen() {
                     flex: 1,
                     backgroundColor: theme.background,
                 }}
+                onTouchStart={
+                    inputMode === 'voice' && voiceState === 'speaking'
+                        ? handleThreadTap
+                        : undefined
+                }
             >
                 {showEmptyGreeting ? (
                     <KeyboardAvoidingView
@@ -1306,7 +1351,16 @@ export function ChatDetailScreen() {
                     <TaskProgressCard task={activeTask} docked />
                 ) : null}
                 <Animated.View style={{ paddingBottom: insets.bottom }}>
-                    {renderInputToolbarBase({})}
+                    {inputMode === 'voice' ? (
+                        <VoiceModeHost
+                            chatId={chatId}
+                            onExit={exitVoice}
+                            onStateChange={setVoiceState}
+                            interruptRef={voiceInterruptRef}
+                        />
+                    ) : (
+                        renderInputToolbarBase({})
+                    )}
                 </Animated.View>
             </Animated.View>
 
@@ -1468,4 +1522,117 @@ const detailStyles = StyleSheet.create({
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
     historySeparatorText: { fontSize: 12 },
+    voiceIndicatorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 1,
+    },
+    voiceIndicatorDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    voiceIndicatorLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+    },
 });
+
+function VoiceModeIndicator({
+    theme,
+    descriptor,
+}: {
+    theme: any;
+    descriptor: any;
+}) {
+    const scale = useSharedValue(1);
+    const opacity = useSharedValue(1);
+    useEffect(() => {
+        scale.value = withRepeat(
+            withSequence(
+                withTiming(1.4, { duration: 700 }),
+                withTiming(1, { duration: 700 }),
+            ),
+            -1,
+            false,
+        );
+        opacity.value = withRepeat(
+            withSequence(
+                withTiming(0.5, { duration: 700 }),
+                withTiming(1, { duration: 700 }),
+            ),
+            -1,
+            false,
+        );
+        return () => {
+            cancelAnimation(scale);
+            cancelAnimation(opacity);
+        };
+    }, [scale, opacity]);
+    const dotStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }],
+        opacity: opacity.value,
+    }));
+    return (
+        <View style={detailStyles.voiceIndicatorRow}>
+            <Animated.View
+                style={[
+                    detailStyles.voiceIndicatorDot,
+                    { backgroundColor: theme.accentAlt },
+                    dotStyle,
+                ]}
+            />
+            <Text
+                theme={descriptor}
+                style={[
+                    detailStyles.voiceIndicatorLabel,
+                    { color: theme.accentAlt },
+                ]}
+            >
+                voice mode
+            </Text>
+        </View>
+    );
+}
+
+type VoiceModeHostProps = {
+    chatId: string;
+    onExit: () => void;
+    onStateChange: (state: VoiceState) => void;
+    interruptRef: React.MutableRefObject<() => void>;
+};
+
+function VoiceModeHost({
+    chatId,
+    onExit,
+    onStateChange,
+    interruptRef,
+}: VoiceModeHostProps) {
+    const { state, interrupt, stop } = useVoiceConversation({ chatId });
+
+    useEffect(() => {
+        onStateChange(state);
+    }, [state, onStateChange]);
+
+    useEffect(() => {
+        interruptRef.current = interrupt;
+    }, [interrupt, interruptRef]);
+
+    const handleExit = useCallback(() => {
+        stop();
+        onExit();
+    }, [stop, onExit]);
+
+    const handleMicPress = useCallback(() => {
+        if (state === 'speaking') interrupt();
+    }, [state, interrupt]);
+
+    return (
+        <VoiceDock
+            state={state}
+            onExit={handleExit}
+            onMicPress={handleMicPress}
+        />
+    );
+}

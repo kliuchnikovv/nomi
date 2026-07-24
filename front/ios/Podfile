@@ -22,6 +22,14 @@ if linkage != nil
 end
 
 target 'genie' do
+  # AppCheckCore (Swift) requires module maps for its GoogleUtilities and
+  # RecaptchaInterop deps. Do NOT use global `use_modular_headers!` — under RN
+  # 0.81 it makes React-RuntimeCore and React-jsitooling emit modulemaps with
+  # the same `react_runtime` module name into a shared header dir, breaking
+  # the build with "Redefinition of module 'react_runtime'".
+  pod 'GoogleUtilities', :modular_headers => true
+  pod 'RecaptchaInterop', :modular_headers => true
+
   use_expo_modules!
   config = use_native_modules!
 

@@ -220,6 +220,8 @@ interface GiftedChatRenderersParams {
     onMessageAction?: (messageId: string, action: MessageAction) => void;
     chips?: { label: string; text: string }[];
     onChipPress?: (text: string) => void;
+    onEnterVoice?: () => void;
+    voiceSpeaking?: boolean;
 }
 
 export function useGiftedChatRenderers({
@@ -236,6 +238,8 @@ export function useGiftedChatRenderers({
     inputAnimY,
     chips,
     onChipPress,
+    onEnterVoice,
+    voiceSpeaking,
 }: GiftedChatRenderersParams) {
     const { width: windowWidth } = useWindowDimensions();
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
@@ -430,6 +434,7 @@ export function useGiftedChatRenderers({
                         onSend={onSendRef.current}
                         chips={chips}
                         onChipPress={onChipPress}
+                        onEnterVoice={onEnterVoice}
                     />
                 </ReAnimated.View>
             );
@@ -447,6 +452,7 @@ export function useGiftedChatRenderers({
             inputToolbarAnimStyle,
             chips,
             onChipPress,
+            onEnterVoice,
         ],
     );
 
@@ -590,6 +596,14 @@ export function useGiftedChatRenderers({
                 (!contentParts ||
                     contentParts.every((p: any) => p.type === 'text'));
 
+            // In voice mode, the newest visible assistant message is the one
+            // Nomi is currently speaking. Render it bigger with a "Nomi is
+            // speaking" label + blinking caret while `voiceSpeaking` is true.
+            // In an inverted GiftedChat, the newest message has no `nextMessage`.
+            const isLatestAssistant = isAssistant && !props.nextMessage;
+            const isSpeakingLatest =
+                !!voiceSpeaking && isLatestAssistant && messageText.length > 0;
+
             // Render attachments helper component
             const AttachmentsComponent = showAttachmentsInside ? (
                 <View style={{ marginBottom: 8 }}>
@@ -655,15 +669,56 @@ export function useGiftedChatRenderers({
                         isStreaming || !hasMarkdown(messageText);
 
                     if (shouldUseFastText) {
+                        const speakingTextStyle = isSpeakingLatest
+                            ? [
+                                  simpleStyles.text,
+                                  {
+                                      fontSize: 17,
+                                      lineHeight: 24,
+                                      color: theme.textPrimary,
+                                  },
+                              ]
+                            : simpleStyles.text;
                         return (
                             <View style={{ width: '100%' }}>
                                 {ContextItemsComponent}
                                 {AttachmentsComponent}
+                                {isSpeakingLatest ? (
+                                    <View
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            marginBottom: 6,
+                                        }}
+                                    >
+                                        <View
+                                            style={{
+                                                width: 6,
+                                                height: 6,
+                                                borderRadius: 3,
+                                                backgroundColor:
+                                                    theme.accentAlt,
+                                            }}
+                                        />
+                                        <Text
+                                            style={{
+                                                fontSize: 11,
+                                                fontWeight: '600',
+                                                color: theme.accent,
+                                            }}
+                                        >
+                                            Nomi is speaking
+                                        </Text>
+                                    </View>
+                                ) : null}
                                 <FastText
                                     text={messageText}
-                                    style={simpleStyles.text}
+                                    style={speakingTextStyle}
                                     onLongPress={handleTextLongPress}
-                                    isStreaming={isStreaming}
+                                    isStreaming={
+                                        isStreaming || isSpeakingLatest
+                                    }
                                 />
                                 {ActionsComponent}
                             </View>
@@ -773,6 +828,8 @@ export function useGiftedChatRenderers({
             theme,
             handleTextLongPress,
             showToolCalls,
+            assistantWorking,
+            voiceSpeaking,
         ],
     );
 

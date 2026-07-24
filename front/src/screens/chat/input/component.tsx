@@ -43,6 +43,7 @@ import {
 } from 'react-native';
 import { Text } from '@genie/ds';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { createStyles } from './styles.tsx';
 import { useChat } from '../context';
 import {
@@ -74,6 +75,7 @@ type Props = {
     onSend: (text: string) => void;
     chips?: Chip[];
     onChipPress?: (text: string) => void;
+    onEnterVoice?: () => void;
 };
 
 type LocalAttachment = {
@@ -87,7 +89,12 @@ type LocalAttachment = {
     loading: boolean;
 };
 
-export default function ChatInput({ onSend, chips, onChipPress }: Props) {
+export default function ChatInput({
+    onSend,
+    chips,
+    onChipPress,
+    onEnterVoice,
+}: Props) {
     const [value, setValue] = useState('');
     const [modelMenuVisible, setModelMenuVisible] = useState(false);
     const [teamMenuVisible, setTeamMenuVisible] = useState(false);
@@ -207,10 +214,8 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
     ]);
 
     const openVoice = useCallback(() => {
-        if (activeChatID) {
-            navigation.navigate('VoiceScreen', { chatId: activeChatID });
-        }
-    }, [activeChatID, navigation]);
+        onEnterVoice?.();
+    }, [onEnterVoice]);
 
     const showMicButton =
         value.length === 0 && attachments.length === 0 && !assistantWorking;
@@ -965,7 +970,7 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                         onPress={handleSend}
                         style={({ pressed }) => [
                             styles.circleBtn,
-                            styles.sendCircle,
+                            { backgroundColor: 'transparent', overflow: 'hidden' },
                             isSendDisabled && styles.circleBtnDisabled,
                             pressed &&
                                 !isSendDisabled &&
@@ -974,6 +979,18 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                         ]}
                         disabled={isSendDisabled || isSubmitting}
                     >
+                        <LinearGradient
+                            colors={[theme.accent, theme.accentAlt]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={{
+                                position: 'absolute',
+                                left: 0,
+                                right: 0,
+                                top: 0,
+                                bottom: 0,
+                            }}
+                        />
                         {isSubmitting ? (
                             <ActivityIndicator size="small" color="#fff" />
                         ) : (

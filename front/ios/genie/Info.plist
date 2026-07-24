@@ -1,109 +1,102 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
-	<key>CFBundleDisplayName</key>
-	<string>Nomi</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>com.kliuchnikovv.nomi</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>Nomi</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleSignature</key>
-	<string>????</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>nomi</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.googleusercontent.apps.294499144277-u8gr39urgpdott3sheeqk3977h2486tm</string>
-			</array>
-		</dict>
-	</array>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<false/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
-	<key>NSCalendarsUsageDescription</key>
-	<string>Nomi needs access to your calendar to help manage your events</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Nomi needs access to your camera to take photos for attachments</string>
-	<key>NSContactsUsageDescription</key>
-	<string>Nomi needs access to your contacts to help you communicate with people</string>
-	<key>NSHealthShareUsageDescription</key>
-	<string>Nomi needs access to read your health data to provide personalized health insights</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>Nomi needs permission to write health data like workouts, nutrition, and body measurements</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Nomi needs access to your location to provide location-based services</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Nomi needs access to your microphone to record voice messages</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Nomi needs access to your photo library to select images for attachments</string>
-	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>Helper</string>
-	<key>NSRemindersUsageDescription</key>
-	<string>Nomi needs access to your reminders to help you stay organized</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Nomi uses speech recognition to transcribe your voice messages</string>
-	<key>RCTNewArchEnabled</key>
-	<true/>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>integration-background-gmail</string>
-		<string>integration-background-calendar</string>
-		<string>integration-background-github</string>
-		<string>integration-background-telegram</string>
-		<string>integration-background-ios_calendar</string>
-		<string>integration-background-ios_reminders</string>
-		<string>integration-background-ios_contacts</string>
-		<string>background-email-sync</string>
-		<string>diagnostic-heartbeat</string>
-	</array>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>processing</string>
-		<string>location</string>
-		<string>remote-notification</string>
-	</array>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>arm64</string>
-	</array>
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<false/>
-</dict>
+  <dict>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+      <string>diagnostic-heartbeat</string>
+    </array>
+    <key>CADisableMinimumFrameDurationOnPhone</key>
+    <true/>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Nomi</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Nomi</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.0.1</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>com.kliuchnikovv.nomi</string>
+        </array>
+      </dict>
+    </array>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+      <key>NSAllowsArbitraryLoads</key>
+      <false/>
+      <key>NSAllowsLocalNetworking</key>
+      <true/>
+    </dict>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Nomi needs access to your calendar to help manage your events</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Nomi needs access to your camera to take photos for attachments</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Nomi needs access to your contacts to help you communicate with people</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>Nomi needs access to read your health data to provide personalized health insights</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>Nomi needs permission to write health data like workouts, nutrition, and body measurements</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your location</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your location</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Nomi needs access to your location to provide location-based services</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Nomi uses the microphone for voice conversations.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Nomi needs access to your photo library to select images for attachments</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Helper</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Nomi needs access to your reminders to help you stay organized</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Nomi uses speech recognition to transcribe what you say in voice mode.</string>
+    <key>RCTNewArchEnabled</key>
+    <true/>
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>fetch</string>
+      <string>processing</string>
+    </array>
+    <key>UILaunchStoryboardName</key>
+    <string>SplashScreen</string>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+      <string>arm64</string>
+    </array>
+    <key>UIRequiresFullScreen</key>
+    <false/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+      <string>UIInterfaceOrientationPortrait</string>
+      <string>UIInterfaceOrientationPortraitUpsideDown</string>
+      <string>UIInterfaceOrientationLandscapeLeft</string>
+      <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UIUserInterfaceStyle</key>
+    <string>Light</string>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <false/>
+  </dict>
 </plist>

@@ -26,9 +26,11 @@ export function handleDeepLink(
             navigation.navigate('Planning');
             break;
         case 'voice':
+            // Voice is now inline inside ChatDetail — open the chat and
+            // request voice mode via `startVoice`.
             navigation.navigate('Chat', {
-                screen: 'VoiceScreen',
-                params: { chatId: link.params.chatId },
+                screen: 'ChatDetail',
+                params: { chatId: link.params.chatId, startVoice: true },
             });
             break;
     }

@@ -27,6 +27,8 @@ import * as PCPModel from './src/screens/integrationsSidebar/PluginChatsProvider
 const { PluginChatsProvider } = PCPModel;
 
 import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
+import * as Font from 'expo-font';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
@@ -111,6 +113,32 @@ function App() {
                 // raises E_TASK_NOT_FOUND and terminates the app. Plugin
                 // registration is local (no network), so it can't stall on
                 // flaky DNS the way initApiUrl can.
+                // Preload vector-icons fonts via expo-font BEFORE any Ionicons /
+                // MaterialCommunityIcons component mounts. @expo/vector-icons
+                // uses its own Font.isLoaded registry (not iOS UIAppFonts), and
+                // renders <Text /> (blank) until loadAsync resolves. Preloading
+                // here makes fontIsLoaded=true at first mount, so icons paint
+                // correctly on the first frame instead of flickering / staying
+                // blank if the async load fails silently.
+                setInitStatus('Loading icon fonts...');
+                console.log(
+                    '[App] Ionicons.font =',
+                    JSON.stringify(Ionicons.font),
+                    'MCI.font =',
+                    JSON.stringify(MaterialCommunityIcons.font),
+                );
+                try {
+                    await Font.loadAsync({
+                        ...Ionicons.font,
+                        ...MaterialCommunityIcons.font,
+                    });
+                    console.log('[App] Icon fonts loaded OK');
+                } catch (fontErr) {
+                    const msg = String((fontErr as Error)?.message || fontErr);
+                    console.error('[App] Font.loadAsync failed:', msg);
+                    setInitStatus(`Font load failed: ${msg}`);
+                }
+
                 setInitStatus('Registering plugins...');
                 await registerClientPlugins();
                 defineAllBackgroundTasks();

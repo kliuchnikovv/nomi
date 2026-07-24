@@ -15,6 +15,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { createMarkdownStyles } from './dynamicStyles';
 import { createMarkdownRules } from './markdownRules';
 import { SingleToolCall, ReasoningBlock } from './ToolCalls';
+import { ToolResultCard } from './ToolResultCard';
 import { DocumentBlock } from './DocumentBlock';
 import { getChatElementComponent } from '../../../plugins/chatElementRegistry';
 import {
@@ -237,6 +238,16 @@ const ToolCallsGroup = memo(function ToolCallsGroup({
                         unwrapDiscoveryToolCall(part.tool_call) ??
                         decorateKnownToolCall(part.tool_call) ??
                         part.tool_call;
+                    const cardKind = (resolved as any).card;
+                    if (cardKind && cardKind !== 'generic') {
+                        return (
+                            <ToolResultCard
+                                key={`tool-${index}`}
+                                tool={resolved as any}
+                                variant={cardKind}
+                            />
+                        );
+                    }
                     return (
                         <SingleToolCall
                             key={`tool-${index}`}

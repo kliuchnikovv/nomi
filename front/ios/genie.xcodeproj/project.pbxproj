@@ -45,6 +45,7 @@
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = genie/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		74D8BF5D59F3A3FBE8DCD647 /* Pods-genie.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-genie.debug.xcconfig"; path = "Target Support Files/Pods-genie/Pods-genie.debug.xcconfig"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = genie/AppDelegate.swift; sourceTree = "<group>"; };
+		79535990419E45FDAAF57E61 /* SplashScreen.storyboard */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = SplashScreen.storyboard; path = genie/SplashScreen.storyboard; sourceTree = "<group>"; };
 		796AD9172F4CFF14001F9C89 /* IOSMailManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSMailManager.swift; path = genie/IOSMailManager.swift; sourceTree = "<group>"; };
 		796AD9182F4CFF14001F9C89 /* IOSShortcutsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSShortcutsManager.swift; path = genie/IOSShortcutsManager.swift; sourceTree = "<group>"; };
 		79797DFD2F4393E90022FF81 /* DateExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DateExtensions.swift; path = genie/DateExtensions.swift; sourceTree = "<group>"; };
@@ -96,6 +97,7 @@
 				79A9FF402F438DE900ED05DC /* IOSHealthManager.swift */,
 				79A9FF412F438DE900ED05DC /* IOSNativeModules.m */,
 				79797EDD2F4396200022FF81 /* ProjectClassifierModule.swift */,
+				79535990419E45FDAAF57E61 /* SplashScreen.storyboard */,
 			);
 			name = genie;
 			sourceTree = "<group>";
@@ -117,6 +119,14 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		475F8F7EDA544EDA90326663 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Resources;
+			path = "";
+			sourceTree = "<group>";
+		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
 			isa = PBXGroup;
 			children = (
@@ -133,6 +143,7 @@
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
 				90648BC6E87765B8CD738A3B /* ExpoModulesProviders */,
+				475F8F7EDA544EDA90326663 /* Resources */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -177,6 +188,7 @@
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
+				FA5175E1000000000ABCDEF1 /* Link _node_modules → node_modules (monorepo asset path fix) */,
 				A9467A7211929CC8A680ABF4 /* [CP] Embed Pods Frameworks */,
 				D688C16EE9655961E0D8346D /* [CP] Copy Pods Resources */,
 				79045B352F9D130B00BEA1BB /* Embed Foundation Extensions */,
@@ -333,6 +345,21 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		FA5175E1000000000ABCDEF1 /* Link _node_modules → node_modules (monorepo asset path fix) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Link _node_modules → node_modules (monorepo asset path fix)";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nASSETS_DIR=\"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/assets\"\nif [ -d \"$ASSETS_DIR/node_modules\" ] && [ ! -e \"$ASSETS_DIR/_node_modules\" ]; then\n  ln -sfn node_modules \"$ASSETS_DIR/_node_modules\"\n  echo \"linked _node_modules -> node_modules in app bundle assets\"\nfi\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -383,11 +410,12 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.kliuchnikovv.nomi;
-				PRODUCT_NAME = genie;
+				PRODUCT_NAME = Nomi;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "genie-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
@@ -416,10 +444,11 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.kliuchnikovv.nomi;
-				PRODUCT_NAME = genie;
+				PRODUCT_NAME = Nomi;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "genie-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;

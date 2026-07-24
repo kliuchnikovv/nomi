@@ -50,15 +50,12 @@ export const createStyles = (theme: ThemeColors) =>
         stopCircle: {
             backgroundColor: '#e74c3c',
         },
-        sendCircle: {
-            backgroundColor: theme.accentAlt,
-        },
         modelPill: {
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 16,
-            height: 44,
-            borderRadius: 22,
+            paddingHorizontal: 14,
+            height: 40,
+            borderRadius: 20,
             backgroundColor: theme.surface,
             flexShrink: 1,
         },
@@ -73,9 +70,9 @@ export const createStyles = (theme: ThemeColors) =>
         thinkBadge: {
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 16,
-            height: 44,
-            borderRadius: 22,
+            paddingHorizontal: 14,
+            height: 40,
+            borderRadius: 20,
             backgroundColor: theme.surface,
             borderWidth: 1,
             borderColor: theme.accentAlt,

@@ -9,8 +9,7 @@ export type AuthStackParamList = {
 
 // Chat nested stack (inside the Chat tab)
 export type ChatStackParamList = {
-    ChatDetail: { chatId?: string };
-    VoiceScreen: { chatId: string };
+    ChatDetail: { chatId?: string; startVoice?: boolean };
     CommandScreen: { spec: import('../commands/types').CommandSpec };
 };
 

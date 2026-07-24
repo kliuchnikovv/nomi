@@ -1,40 +1,45 @@
 {
-    "name": "nomi",
-    "displayName": "Nomi",
-    "expo": {
-        "name": "Nomi",
-        "slug": "genie",
-        "plugins": [
-            [
-                "expo-notifications",
-                {
-                    "color": "#ffffff"
-                }
-            ],
-            [
-                "expo-speech-recognition",
-                {
-                    "microphonePermission": "Nomi uses the microphone for voice conversations.",
-                    "speechRecognitionPermission": "Nomi uses speech recognition to transcribe what you say in voice mode."
-                }
-            ]
-        ],
-        "extra": {
-            "eas": {
-                "projectId": "c96e27ba-314a-4d90-8157-8c1a531460fb"
-            }
-        },
-        "ios": {
-            "infoPlist": {
-                "UIBackgroundModes": [
-                    "fetch",
-                    "processing",
-                    "remote-notification"
-                ],
-                "BGTaskSchedulerPermittedIdentifiers": [
-                    "diagnostic-heartbeat"
-                ]
-            }
+  "expo": {
+    "name": "Nomi",
+    "slug": "genie",
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#ffffff"
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Nomi uses the microphone for voice conversations.",
+          "speechRecognitionPermission": "Nomi uses speech recognition to transcribe what you say in voice mode."
+        }
+      ],
+      "./plugins/with-no-push"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c96e27ba-314a-4d90-8157-8c1a531460fb"
+      }
+    },
+    "ios": {
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "fetch",
+          "processing"
+        ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "diagnostic-heartbeat"
+        ],
+        "UIAppFonts": [
+          "Ionicons.ttf",
+          "MaterialCommunityIcons.ttf"
+        ],
+        "NSSpeechRecognitionUsageDescription": "Nomi uses speech recognition to transcribe what you say in voice mode.",
+        "NSMicrophoneUsageDescription": "Nomi uses the microphone for voice conversations."
+      },
+      "bundleIdentifier": "com.kliuchnikovv.nomi"
     }
+  }
 }
