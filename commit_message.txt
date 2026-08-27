@@ -1,0 +1,6 @@
+feat: auto-detect available models from API key and endpoint
+
+- Add DiscoverModels() function that queries OpenAI-compatible /v1/models endpoint
+- Add POST /api/v1/models/discover handler
+- Add comprehensive tests for discovery logic
+- Integrate with existing ModelsHandler pattern

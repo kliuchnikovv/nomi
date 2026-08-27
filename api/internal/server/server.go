@@ -52,7 +52,7 @@ func New(
 		authMiddleware     = auth.NewAuthMiddleware(ctr.TokenManager, ctr.Storage)
 		authHandler        = handlers.NewAuthHandler(ctr.AuthService)
 		streamHandler      = handlers.NewStreamHandler(logger, hubInstance, ctr.Storage, ctr.CredentialsStore)
-		modelsHandler      = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
+		modelsHandler      = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"), logger)
 		uploadHandler      = handlers.NewUploadHandler(ctr.Storage)
 		credentialsHandler = handlers.NewCredentialsHandler(logger, ctr.CredentialsStore)
 		cryptoKey          []byte
@@ -162,6 +162,7 @@ func New(
 
 	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)
+	r.POST("/api/v1/models/discover", modelsHandler.DiscoverModelsHandler)
 
 	// Tools API (Used by Agent/Python Backend)
 	// Takes ?session_id=... to resolve user context

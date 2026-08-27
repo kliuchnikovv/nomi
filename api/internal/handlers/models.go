@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type Model struct {
@@ -50,11 +51,16 @@ type ModelsHandler struct {
 	modelsCache *ModelsResponse
 	lastUpdated time.Time
 	mu          sync.RWMutex
+	Logger      *zap.Logger
+
+	discoverModelsFunc func(apiKey, endpoint, provider string) ([]Model, error)
 }
 
-func NewModelsHandler(apiKey string) *ModelsHandler {
+func NewModelsHandler(apiKey string, logger *zap.Logger) *ModelsHandler {
 	return &ModelsHandler{
-		apiKey: apiKey,
+		apiKey:             apiKey,
+		Logger:             logger,
+		discoverModelsFunc: DiscoverModels,
 	}
 }
 
