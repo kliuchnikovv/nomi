@@ -1,5 +1,5 @@
 {
-  "name": "@genie/plugin-ios_contacts",
+  "name": "@nomi/plugin-ios_contacts",
   "version": "1.0.0",
   "description": "iOS native Contacts integration via Contacts Framework",
   "main": "./client/executor.ts",

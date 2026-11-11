@@ -1,7 +1,7 @@
 # Nomi DS — how to build with these components
 
 This design system is React Native components running on `react-native-web` in the browser.
-Components are exported globally as `window.GenieDS.*`. Style is passed as a `theme` **prop**,
+Components are exported globally as `window.NomiDS.*`. Style is passed as a `theme` **prop**,
 never through CSS classes or a `ThemeProvider` — every component that renders content takes a
 `theme: ThemeDescriptor` and reads its colors, typography, spacing, and radius from it.
 
@@ -10,8 +10,8 @@ never through CSS classes or a `ThemeProvider` — every component that renders 
 There is no provider. Import a theme, pass it into each component:
 
 ```tsx
-import { Text, Button, Card } from '@genie/ds';
-import { darkMinimalTheme } from '@genie/front/themes/darkMinimal';
+import { Text, Button, Card } from '@nomi/ds';
+import { darkMinimalTheme } from '@nomi/front/themes/darkMinimal';
 
 // ...
 
@@ -26,7 +26,7 @@ import { darkMinimalTheme } from '@genie/front/themes/darkMinimal';
 </Card>
 ```
 
-Available themes (in `@genie/front/themes/`):
+Available themes (in `@nomi/front/themes/`):
 `darkMinimalTheme`, `visualStudioLightTheme`, `tokyoNightTheme`, `retroSunsetTheme` (see
 `packages/ds/.storybook/preview.tsx` for the full list, and additional themes in the same dir).
 
@@ -53,7 +53,7 @@ All visual choices are prop-driven. Never invent CSS class names — the DS does
 | `Text`     | `variant`, `tone`, `weight`, `align` |
 
 For layout **around** these components use React Native's own primitives: `<View style={{ … }}>`
-from `react-native-web` (via `window.GenieDS` reserved for DS exports; import RN primitives
+from `react-native-web` (via `window.NomiDS` reserved for DS exports; import RN primitives
 directly). `style` is a `StyleProp<ViewStyle | TextStyle>` object, not a className.
 
 ## Where to look
@@ -67,9 +67,9 @@ directly). `style` is a `StyleProp<ViewStyle | TextStyle>` object, not a classNa
 ## One idiomatic build snippet
 
 ```tsx
-import { Card, Text, Button, Divider } from '@genie/ds';
+import { Card, Text, Button, Divider } from '@nomi/ds';
 import { View } from 'react-native-web';
-import { darkMinimalTheme as t } from '@genie/front/themes/darkMinimal';
+import { darkMinimalTheme as t } from '@nomi/front/themes/darkMinimal';
 
 function TaskCard({ title, subtitle, onOpen }) {
     return (

@@ -5,7 +5,7 @@
 
 import * as SecureStore from 'expo-secure-store';
 
-const ENCRYPTION_KEY_ALIAS = 'genie_encryption_key';
+const ENCRYPTION_KEY_ALIAS = 'nomi_encryption_key';
 
 // Simple XOR-based encryption for tokens
 // In production, consider using a proper crypto library

@@ -3,7 +3,7 @@
  * Stores and retrieves cached repository data in SQLite
  */
 
-import { getDatabase } from "@genie/front/services/database/database";
+import { getDatabase } from "@nomi/front/services/database/database";
 
 export interface CachedGitHubRepo {
   id: number;

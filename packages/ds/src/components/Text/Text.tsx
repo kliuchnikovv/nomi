@@ -2,7 +2,7 @@ import React from 'react';
 import { Text as RNText, StyleSheet } from 'react-native';
 import type { StyleProp, TextProps as RNTextProps, TextStyle } from 'react-native';
 
-import type { ThemeColors, ThemeDescriptor, TypographyVariant } from '@genie/front/themes/types';
+import type { ThemeColors, ThemeDescriptor, TypographyVariant } from '@nomi/front/themes/types';
 
 export type TextVariant = keyof ThemeDescriptor['typography'];
 

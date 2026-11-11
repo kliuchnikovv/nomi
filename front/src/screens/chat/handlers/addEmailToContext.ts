@@ -7,8 +7,8 @@
  * The context item is displayed in the chat footer and provides context for AI responses.
  */
 
-import { eventEmitter, RAG_EVENTS } from '@genie/front/services/events';
-import type { Email } from '@genie/front/services/integrations/IntegrationStorage';
+import { eventEmitter, RAG_EVENTS } from '@nomi/front/services/events';
+import type { Email } from '@nomi/front/services/integrations/IntegrationStorage';
 
 /**
  * Add an email to the current chat context

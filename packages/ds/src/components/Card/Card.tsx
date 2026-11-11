@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewProps, ViewStyle } from 'react-native';
 
-import type { ThemeDescriptor } from '@genie/front/themes/types';
+import type { ThemeDescriptor } from '@nomi/front/themes/types';
 
 export type CardPadding = keyof ThemeDescriptor['spacing'] | 'none';
 export type CardRadius = keyof ThemeDescriptor['radius'];

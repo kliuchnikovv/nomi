@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import { NavArrowRight } from 'iconoir-react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { themes } from '../../../themes';
 import { createComponentStyles } from './settingsComponentStyles';

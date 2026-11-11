@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/datatypes"
 
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 )
 
 // EnqueuePendingActionRequest is the body for the internal enqueue endpoint,

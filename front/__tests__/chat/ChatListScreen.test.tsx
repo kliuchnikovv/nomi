@@ -181,7 +181,7 @@ describe('ChatListScreen', () => {
                 sidebarFilter: 'all',
             };
             const { getAllByText } = renderScreen();
-            // "Genie" appears in both filter chip and badge — expect at least 2
+            // "Nomi" appears in both filter chip and badge — expect at least 2
             expect(getAllByText('Nomi').length).toBeGreaterThanOrEqual(2);
         });
 

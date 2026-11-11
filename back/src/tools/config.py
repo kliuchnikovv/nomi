@@ -120,7 +120,7 @@ class ToolConfigClient:
 
     async def fetch_tools_list(self, session_id: str | None = None) -> list[ToolSpec]:
         """
-        Fetches the list of tools from genie-api (without auth for now).
+        Fetches the list of tools from nomi-api (without auth for now).
         Returns a list of ToolSpec objects.
         """
         tools: list[ToolSpec] = []

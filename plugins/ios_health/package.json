@@ -1,5 +1,5 @@
 {
-  "name": "@genie/plugin-ios_health",
+  "name": "@nomi/plugin-ios_health",
   "version": "1.0.0",
   "description": "iOS native Apple Health (HealthKit) integration",
   "main": "./client/executor.ts",

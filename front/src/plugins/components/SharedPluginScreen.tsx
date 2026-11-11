@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'iconoir-react-native';
-import { useTheme } from '@genie/front/context/ThemeContext';
+import { useTheme } from '@nomi/front/context/ThemeContext';
 
 interface SharedPluginScreenProps {
     title: string;

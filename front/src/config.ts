@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Centralized app configuration
-const DEFAULT_API_URL = 'https://genie-api-production-7074.up.railway.app/api';
-const API_URL_KEY = '@genie_api_url';
+const DEFAULT_API_URL = 'https://nomi-api-production-7074.up.railway.app/api';
+const API_URL_KEY = '@nomi_api_url';
 
 // In-memory cache for sync access
 let cachedApiUrl: string | null = null;

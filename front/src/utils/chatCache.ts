@@ -33,8 +33,8 @@ interface CacheEntry<T> {
 }
 
 const CACHE_KEYS = {
-    CHATS: 'genie_chats_cache',
-    MESSAGES_PREFIX: 'genie_messages_',
+    CHATS: 'nomi_chats_cache',
+    MESSAGES_PREFIX: 'nomi_messages_',
 };
 
 export class ChatCache {
@@ -123,7 +123,7 @@ export class ChatCache {
     static async clearCache(): Promise<void> {
         try {
             const keys = await AsyncStorage.getAllKeys();
-            const cacheKeys = keys.filter(k => k.startsWith('genie_'));
+            const cacheKeys = keys.filter(k => k.startsWith('nomi_'));
             if (cacheKeys.length > 0) {
                 await AsyncStorage.multiRemove(cacheKeys);
             }

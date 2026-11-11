@@ -1,7 +1,7 @@
 {
-  "name": "@genie/plugin-github",
+  "name": "@nomi/plugin-github",
   "version": "1.0.0",
-  "description": "GitHub integration plugin for Genie",
+  "description": "GitHub integration plugin for Nomi",
   "main": "./client/executor.ts",
   "types": "./client/executor.ts",
   "private": true,

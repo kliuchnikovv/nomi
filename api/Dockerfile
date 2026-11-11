@@ -17,7 +17,7 @@ RUN go mod download && go mod verify
 COPY api/ .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /genie-api ./cmd/api/...
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /nomi-api ./cmd/api/...
 
 # Runtime stage
 FROM alpine:3.19
@@ -28,7 +28,7 @@ WORKDIR /app
 RUN apk --no-cache add ca-certificates tzdata
 
 # Copy binary from builder
-COPY --from=builder /genie-api /app/genie-api
+COPY --from=builder /nomi-api /app/nomi-api
 
 # Copy Railway config
 COPY api/config.railway.yaml /app/config.railway.yaml
@@ -43,4 +43,4 @@ COPY plugins /app/plugins
 EXPOSE 8080
 
 # Run
-CMD ["/app/genie-api"]
+CMD ["/app/nomi-api"]

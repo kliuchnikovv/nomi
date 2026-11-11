@@ -8,12 +8,12 @@ Chip, Divider, Input, ListItem, Spinner, Text — 49 files total).
 
 ## Build & bundling
 
-- `packages/ds` has a Vite `build.lib` — `yarn workspace @genie/ds build` emits
+- `packages/ds` has a Vite `build.lib` — `yarn workspace @nomi/ds build` emits
   `packages/ds/dist/index.js` (15.68 KB ESM, `react-native → react-native-web` alias baked in,
   externals: react, react-dom, react-native-web, react/jsx-runtime).
 - Storybook reference: `.design-sync/sb-reference/` — rebuilt in ~4s via
   `npx storybook build -c packages/ds/.storybook -o "$(git rev-parse --show-toplevel)/.design-sync/sb-reference"`.
-- Converter bundle: 272 KB, `window.GenieDS`.
+- Converter bundle: 272 KB, `window.NomiDS`.
 
 ## Forks committed under `.design-sync/overrides/`
 
@@ -61,7 +61,7 @@ with `--no-render-check` and trust `compare.mjs` for verification.
 ## Re-sync risks
 
 - `packages/ds/vite.config.ts`'s `resolve.alias` (`react-native → react-native-web`,
-  `@genie/front → ../../front/src`) governs what ships in `dist/index.js`. Any change to
+  `@nomi/front → ../../front/src`) governs what ships in `dist/index.js`. Any change to
   those aliases silently changes the compiled bundle — code-review the vite config.
 - The two forks (story-imports.mjs, source-storybook.mjs) will drift from upstream on skill
   updates — diff before pulling. The alias plugin block is small (10 lines) and can be

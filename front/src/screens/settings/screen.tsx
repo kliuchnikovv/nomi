@@ -27,11 +27,11 @@ import { SettingsStackParamList } from '../../navigation/types';
 import { TAB_BAR_ICON_HEIGHT } from '../../navigation/MainTabs';
 
 // Shared with plugins/gmail/client/emailAnalyzer.ts
-const EMAIL_ANALYSIS_MODE_KEY = '@genie_email_analysis_mode';
+const EMAIL_ANALYSIS_MODE_KEY = '@nomi_email_analysis_mode';
 type EmailAnalysisMode = 'device' | 'server';
 
-export const PLANNER_MODEL_KEY = '@genie_planner_model';
-export const PLANNER_PROVIDER_KEY = '@genie_planner_provider';
+export const PLANNER_MODEL_KEY = '@nomi_planner_model';
+export const PLANNER_PROVIDER_KEY = '@nomi_planner_provider';
 
 // Chat recap source is now a server-side per-user setting (`session_summary_mode`):
 // 'off' = server-side recap (default), 'agno' = native Agno session summaries.

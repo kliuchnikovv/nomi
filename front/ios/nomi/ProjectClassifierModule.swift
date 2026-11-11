@@ -1,6 +1,6 @@
 //
 //  ProjectClassifierModule.swift
-//  genie
+//  nomi
 //
 //  Uses Apple Foundation Models (iOS 26+) to classify a chat message against
 //  existing projects and return the best-matching project ID, or nil if no

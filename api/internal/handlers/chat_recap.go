@@ -10,8 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/apierror"
-	"github.com/kliuchnikovv/genie-api/internal/services"
+	"github.com/kliuchnikovv/nomi-api/internal/apierror"
+	"github.com/kliuchnikovv/nomi-api/internal/services"
 )
 
 // recapMinMessages is the threshold below which a chat is too short to be worth

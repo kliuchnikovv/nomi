@@ -55,13 +55,13 @@ describe('ChatHeader', () => {
     });
 
     it('renders subtitle when provided', () => {
-        const { getByText } = render(<ChatHeader {...baseProps} subtitle="Team Genie" />);
-        expect(getByText('Team Genie')).toBeTruthy();
+        const { getByText } = render(<ChatHeader {...baseProps} subtitle="Team Nomi" />);
+        expect(getByText('Team Nomi')).toBeTruthy();
     });
 
     it('does not render subtitle when empty', () => {
         const { queryByText } = render(<ChatHeader {...baseProps} subtitle="" />);
-        expect(queryByText('Team Genie')).toBeNull();
+        expect(queryByText('Team Nomi')).toBeNull();
     });
 
     it('renders menu button when showMenu=true', () => {

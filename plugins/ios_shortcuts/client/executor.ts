@@ -3,8 +3,8 @@
  */
 
 import * as FileSystem from 'expo-file-system';
-import type { ClientPluginHandler } from '@genie/front/plugins/clientRegistry';
-import { IOSShortcutsClient } from '@genie/front/services/integrations/clients/IOSShortcutsClient';
+import type { ClientPluginHandler } from '@nomi/front/plugins/clientRegistry';
+import { IOSShortcutsClient } from '@nomi/front/services/integrations/clients/IOSShortcutsClient';
 
 export const iosShortcutsPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {

@@ -246,7 +246,7 @@ export function ChatProvider({
                 // Remember the user's explicit choice globally so new chats
                 // default to it. Only manual picks are persisted — models
                 // auto-loaded from history must not overwrite the default.
-                AsyncStorage.setItem('@genie_selected_model', model).catch(
+                AsyncStorage.setItem('@nomi_selected_model', model).catch(
                     () => {},
                 );
             }
@@ -315,7 +315,7 @@ export function ChatProvider({
 
     // Load persisted detail level on mount
     useEffect(() => {
-        AsyncStorage.getItem('@genie_detail_level').then(saved => {
+        AsyncStorage.getItem('@nomi_detail_level').then(saved => {
             if (
                 saved &&
                 ['hide', 'tool_calls', 'think', 'all'].includes(saved)
@@ -323,7 +323,7 @@ export function ChatProvider({
                 setDetailLevel(saved as DetailLevel);
             }
         });
-        AsyncStorage.getItem('@genie_team_mode_enabled').then(saved => {
+        AsyncStorage.getItem('@nomi_team_mode_enabled').then(saved => {
             if (saved === '1') setTeamModeEnabledInternal(true);
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -332,14 +332,14 @@ export function ChatProvider({
     const setTeamModeEnabled = useCallback((next: boolean) => {
         setTeamModeEnabledInternal(next);
         AsyncStorage.setItem(
-            '@genie_team_mode_enabled',
+            '@nomi_team_mode_enabled',
             next ? '1' : '0',
         ).catch(() => {});
     }, []);
 
     const setDetailLevel = useCallback((level: DetailLevel) => {
         setDetailLevelInternal(level);
-        AsyncStorage.setItem('@genie_detail_level', level);
+        AsyncStorage.setItem('@nomi_detail_level', level);
         switch (level) {
             case 'hide':
                 setShowToolCalls(false);
@@ -1498,7 +1498,7 @@ export function ChatProvider({
                         let preferred: string | null = null;
                         try {
                             const saved = await AsyncStorage.getItem(
-                                '@genie_selected_model',
+                                '@nomi_selected_model',
                             );
                             if (saved && models.some(m => m.id === saved)) {
                                 preferred = saved;

@@ -4,11 +4,11 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { tokenRefreshService } from '@genie/front/services/integrations/tokenRefreshService';
-import { integrationStorage, Email } from '@genie/front/services/integrations/IntegrationStorage';
-import { ragApi } from '@genie/front/apiClient';
-import { AppleIntelligence } from '@genie/front/services/ai/AppleIntelligence';
-import { pluginChatStorage } from '@genie/front/services/plugins/PluginChatStorage';
+import { tokenRefreshService } from '@nomi/front/services/integrations/tokenRefreshService';
+import { integrationStorage, Email } from '@nomi/front/services/integrations/IntegrationStorage';
+import { ragApi } from '@nomi/front/apiClient';
+import { AppleIntelligence } from '@nomi/front/services/ai/AppleIntelligence';
+import { pluginChatStorage } from '@nomi/front/services/plugins/PluginChatStorage';
 
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const lastRunKey = (integrationId: string) =>
@@ -390,7 +390,7 @@ Keep your response brief and actionable.`;
         try {
             // Lazy import to avoid circular dependencies
             const { briefingGenerator } = await import(
-                '@genie/front/services/briefing/BriefingGenerator'
+                '@nomi/front/services/briefing/BriefingGenerator'
             );
 
             // Analyze unanalyzed emails (up to 5 at a time for performance)
@@ -402,7 +402,7 @@ Keep your response brief and actionable.`;
             if (analyzed > 0 && onAsapDetected) {
                 // Check for new ASAP emails
                 const { integrationStorage } = await import(
-                    '@genie/front/services/integrations/IntegrationStorage'
+                    '@nomi/front/services/integrations/IntegrationStorage'
                 );
                 const asapEmails = await integrationStorage.getAsapEmails();
 

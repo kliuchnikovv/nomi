@@ -9,14 +9,14 @@ import {
   Pressable,
   ScrollView,
 } from "react-native";
-import { useTheme } from "@genie/front/context/ThemeContext";
+import { useTheme } from "@nomi/front/context/ThemeContext";
 import { gmailClient } from "../GmailClient";
-import { Email } from "@genie/front/services/integrations/IntegrationStorage";
-import { PluginMainScreenProps } from "@genie/front/plugins/types";
-import { integrationStorage } from "@genie/front/services/integrations/IntegrationStorage";
-import { ContextItem } from "@genie/front/screens/chat/components/ContextItemCard";
-import { contextStore } from "@genie/front/services/ContextStore";
-import { SharedPluginScreen } from "@genie/front/plugins/components/SharedPluginScreen";
+import { Email } from "@nomi/front/services/integrations/IntegrationStorage";
+import { PluginMainScreenProps } from "@nomi/front/plugins/types";
+import { integrationStorage } from "@nomi/front/services/integrations/IntegrationStorage";
+import { ContextItem } from "@nomi/front/screens/chat/components/ContextItemCard";
+import { contextStore } from "@nomi/front/services/ContextStore";
+import { SharedPluginScreen } from "@nomi/front/plugins/components/SharedPluginScreen";
 
 export function GmailMainScreen({
   integrationId: integrationIdProp,

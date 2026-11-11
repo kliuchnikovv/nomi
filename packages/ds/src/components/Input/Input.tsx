@@ -2,7 +2,7 @@ import React, { forwardRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import type { StyleProp, TextInputProps, TextStyle, ViewStyle } from 'react-native';
 
-import type { ThemeDescriptor } from '@genie/front/themes/types';
+import type { ThemeDescriptor } from '@nomi/front/themes/types';
 
 import { Text } from '../Text';
 

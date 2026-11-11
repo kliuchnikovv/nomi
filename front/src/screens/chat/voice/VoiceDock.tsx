@@ -10,7 +10,7 @@ import Animated, {
     cancelAnimation,
     Easing,
 } from 'react-native-reanimated';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import type { VoiceState } from './useVoiceConversation';

@@ -1,5 +1,5 @@
 {
-  "name": "@genie/plugin-imap_email",
+  "name": "@nomi/plugin-imap_email",
   "version": "1.0.0",
   "description": "Universal IMAP/SMTP email integration",
   "main": "./client/executor.ts",

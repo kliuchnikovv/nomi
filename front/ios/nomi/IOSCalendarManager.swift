@@ -1,6 +1,6 @@
 //
 //  IOSCalendarManager.swift
-//  Genie
+//  Nomi
 //
 //  iOS Calendar Manager for EventKit integration
 //

@@ -3,7 +3,7 @@
 # This script runs when Jules initializes the development environment
 set -e
 
-echo ">>> Initializing Jules Environment for Genie Monorepo..."
+echo ">>> Initializing Jules Environment for Nomi Monorepo..."
 
 # ============================================
 # 1. Go Backend (api/)

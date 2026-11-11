@@ -293,7 +293,7 @@ class TelegramService:
         username: str,
         first_name: str,
     ) -> Dict[str, Any]:
-        """Link a Telegram account to a Genie user.
+        """Link a Telegram account to a Nomi user.
         Creates a record in plugin_data table only — no chats table entries.
         """
         import uuid
@@ -365,7 +365,7 @@ class TelegramService:
             await conn.close()
 
     async def deactivate_link(self, user_id: str) -> bool:
-        """Mark the Telegram linked account as inactive for a Genie user."""
+        """Mark the Telegram linked account as inactive for a Nomi user."""
         conn = await self._get_db_conn()
         try:
             row = await conn.fetchrow(
@@ -390,7 +390,7 @@ class TelegramService:
             await conn.close()
 
     async def get_link_status(self, user_id: str) -> Dict[str, Any]:
-        """Check if a Genie user has a linked Telegram account."""
+        """Check if a Nomi user has a linked Telegram account."""
         conn = await self._get_db_conn()
         try:
             row = await conn.fetchrow(
@@ -618,7 +618,7 @@ class TelegramService:
             )
             return
 
-        genie_user_id = str(row["user_id"])
+        nomi_user_id = str(row["user_id"])
         text = message.get("text", "")
         is_voice = False
         if not text:
@@ -639,12 +639,12 @@ class TelegramService:
             else:
                 return
 
-        await self._dispatch_to_brain(chat_id, genie_user_id, data, text, is_voice)
+        await self._dispatch_to_brain(chat_id, nomi_user_id, data, text, is_voice)
 
     async def _dispatch_to_brain(
         self,
         chat_id: int,
-        genie_user_id: str,
+        nomi_user_id: str,
         data: Dict[str, Any],
         text: str,
         is_voice: bool = False,
@@ -684,7 +684,7 @@ class TelegramService:
                 """INSERT INTO plugin_data (id, user_id, plugin_name, record_type, data, created_at, updated_at)
                    VALUES ($1, $2::uuid, $3, $4, $5::jsonb, NOW(), NOW())""",
                 uuid.uuid4(),
-                genie_user_id,
+                nomi_user_id,
                 PLUGIN_NAME,
                 RECORD_TYPE_MESSAGE,
                 json.dumps({
@@ -712,7 +712,7 @@ class TelegramService:
                    LIMIT 50""",
                 PLUGIN_NAME,
                 RECORD_TYPE_MESSAGE,
-                genie_user_id,
+                nomi_user_id,
                 str(chat_id),
             )
             for r in rows:
@@ -747,7 +747,7 @@ class TelegramService:
                 "message": brain_prompt or text,
                 "role": "user",
                 "trace_id": str(uuid.uuid4()),
-                "user_id": genie_user_id,
+                "user_id": nomi_user_id,
                 "agent_type": agent_type,
                 "source": "telegram",
                 "telegram_chat_id": chat_id,
@@ -767,7 +767,7 @@ class TelegramService:
         logger.info(
             "Published telegram message to %s (user=%s, model=%s)",
             channel,
-            genie_user_id,
+            nomi_user_id,
             selected_model or "default",
         )
 
@@ -906,7 +906,7 @@ class TelegramService:
 
         await self._dispatch_to_brain(
             chat_id=tg_user_id,
-            genie_user_id=account["user_id"],
+            nomi_user_id=account["user_id"],
             data=account["data"],
             text=payload,
             brain_prompt=brain_prompt,

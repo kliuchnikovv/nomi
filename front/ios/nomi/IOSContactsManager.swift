@@ -1,6 +1,6 @@
 //
 //  IOSContactsManager.swift
-//  Genie
+//  Nomi
 //
 //  iOS Contacts Manager for Contacts Framework integration
 //

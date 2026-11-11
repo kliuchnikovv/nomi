@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/proactive"
-	"github.com/kliuchnikovv/genie-api/internal/push"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/proactive"
+	"github.com/kliuchnikovv/nomi-api/internal/push"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/datatypes"

@@ -1,17 +1,17 @@
 {
-  "name": "genie-monorepo",
+  "name": "nomi-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "Genie AI Assistant Monorepo",
+  "description": "Nomi AI Assistant Monorepo",
   "workspaces": [
     "front",
     "plugins/*",
     "packages/*"
   ],
   "scripts": {
-    "front": "yarn workspace genie",
-    "gmail": "yarn workspace @genie/plugin-gmail",
-    "calendar": "yarn workspace @genie/plugin-calendar",
+    "front": "yarn workspace nomi",
+    "gmail": "yarn workspace @nomi/plugin-gmail",
+    "calendar": "yarn workspace @nomi/plugin-calendar",
     "postinstall": "node scripts/fix-whisper-exports.js && patch-package",
     "android": "expo run:android",
     "ios": "expo run:ios"

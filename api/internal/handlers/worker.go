@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/kliuchnikovv/genie-api/internal/hub"
+	"github.com/kliuchnikovv/nomi-api/internal/hub"
 	"go.uber.org/zap"
 )
 

@@ -11,11 +11,11 @@
  */
 
 import { gmailClient } from "./GmailClient";
-import { IOSRemindersClient } from "@genie/front/services/integrations/clients/IOSRemindersClient";
-import { pluginChatStorage } from "@genie/front/services/plugins/PluginChatStorage";
+import { IOSRemindersClient } from "@nomi/front/services/integrations/clients/IOSRemindersClient";
+import { pluginChatStorage } from "@nomi/front/services/plugins/PluginChatStorage";
 import { analyzeEmailWithLog, isPromotionalEmail } from "./emailAnalyzer";
 import { backgroundLogger, type EmailLogEntry } from "./backgroundLogger";
-import { eventsApi } from "@genie/front/apiClient";
+import { eventsApi } from "@nomi/front/apiClient";
 
 export async function backgroundTask(integrationId: string): Promise<void> {
   const startTime = Date.now();

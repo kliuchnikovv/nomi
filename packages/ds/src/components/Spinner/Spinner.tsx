@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
-import type { ThemeDescriptor } from '@genie/front/themes/types';
+import type { ThemeDescriptor } from '@nomi/front/themes/types';
 
 export type SpinnerSize = 'sm' | 'md' | 'lg';
 export type SpinnerTone = 'primary' | 'accent' | 'onAccent';

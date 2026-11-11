@@ -3,7 +3,7 @@ import {
     ServerIntegration,
     LocalIntegrationRef,
     SyncOp,
-} from '@genie/front/services/integrations/integrationSync';
+} from '@nomi/front/services/integrations/integrationSync';
 
 const server = (
     id: string,

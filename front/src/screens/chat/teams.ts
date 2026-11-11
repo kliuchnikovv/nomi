@@ -27,12 +27,12 @@ export const AVAILABLE_TEAMS: TeamDetails[] = [
     //     },
     // },
     // {
-    //     id: 'genie',
-    //     name: 'Genie Team',
+    //     id: 'nomi',
+    //     name: 'Nomi Team',
     //     description: 'General purpose assistant with search and maps capability.',
     //     command: {
-    //         type: 'genie',
-    //         name: 'Genie Team',
+    //         type: 'nomi',
+    //         name: 'Nomi Team',
     //     },
     // },
     // {

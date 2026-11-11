@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/chat"
-	"github.com/kliuchnikovv/genie-api/internal/crypto"
-	"github.com/kliuchnikovv/genie-api/internal/ghtoken"
-	intgr "github.com/kliuchnikovv/genie-api/internal/integrations"
-	"github.com/kliuchnikovv/genie-api/internal/plugins"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/chat"
+	"github.com/kliuchnikovv/nomi-api/internal/crypto"
+	"github.com/kliuchnikovv/nomi-api/internal/ghtoken"
+	intgr "github.com/kliuchnikovv/nomi-api/internal/integrations"
+	"github.com/kliuchnikovv/nomi-api/internal/plugins"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 	"go.uber.org/zap"
 )
 

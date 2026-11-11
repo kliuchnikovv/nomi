@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/crypto"
-	"github.com/kliuchnikovv/genie-api/internal/githubapp"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/crypto"
+	"github.com/kliuchnikovv/nomi-api/internal/githubapp"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 )
 
 // ForUser returns a GitHub token for the user, or "" if none is available.

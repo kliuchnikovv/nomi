@@ -1,6 +1,6 @@
 //
 //  DateExtensions.swift
-//  Genie
+//  Nomi
 //
 //  Shared Date extensions used across all native modules
 //

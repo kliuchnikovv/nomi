@@ -1,4 +1,4 @@
-module github.com/kliuchnikovv/genie-api
+module github.com/kliuchnikovv/nomi-api
 
 go 1.25.2
 

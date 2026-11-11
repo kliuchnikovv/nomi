@@ -1,11 +1,11 @@
 import React from 'react';
 import type { Preview } from '@storybook/react';
 
-import { darkMinimalTheme } from '@genie/front/themes/darkMinimal';
-import { visualStudioLightTheme } from '@genie/front/themes/visualStudioLight';
-import { tokyoNightTheme } from '@genie/front/themes/tokyoNight';
-import { retroSunsetTheme } from '@genie/front/themes/retroSunset';
-import type { ThemeDescriptor } from '@genie/front/themes/types';
+import { darkMinimalTheme } from '@nomi/front/themes/darkMinimal';
+import { visualStudioLightTheme } from '@nomi/front/themes/visualStudioLight';
+import { tokyoNightTheme } from '@nomi/front/themes/tokyoNight';
+import { retroSunsetTheme } from '@nomi/front/themes/retroSunset';
+import type { ThemeDescriptor } from '@nomi/front/themes/types';
 
 const themes: Record<string, ThemeDescriptor> = {
     darkMinimal: darkMinimalTheme,

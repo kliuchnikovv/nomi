@@ -4,12 +4,12 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
-import { useTheme } from '@genie/front/context/ThemeContext';
-import { PluginMainScreenProps } from '@genie/front/plugins/types';
+import { useTheme } from '@nomi/front/context/ThemeContext';
+import { PluginMainScreenProps } from '@nomi/front/plugins/types';
 import { Mail } from 'iconoir-react-native';
-import { pluginChatStorage, PluginChat } from '@genie/front/services/plugins/PluginChatStorage';
-import { SharedPluginScreen } from '@genie/front/plugins/components/SharedPluginScreen';
-import { contextStore } from '@genie/front/services/ContextStore';
+import { pluginChatStorage, PluginChat } from '@nomi/front/services/plugins/PluginChatStorage';
+import { SharedPluginScreen } from '@nomi/front/plugins/components/SharedPluginScreen';
+import { contextStore } from '@nomi/front/services/ContextStore';
 import { backgroundLogger, BackgroundRunLog, EmailAction } from '../backgroundLogger';
 import { backgroundTask } from '../background';
 

@@ -90,12 +90,12 @@ export function registerClientPlugins(): Promise<void> {
         // Gmail
         try {
             console.log('[registerClientPlugins] Loading Gmail plugin...');
-            const { gmailPlugin } = await import('@genie/plugin-gmail/client');
+            const { gmailPlugin } = await import('@nomi/plugin-gmail/client');
             console.log(
                 '[registerClientPlugins] Gmail plugin loaded, loading background module...',
             );
             const gmailBackgroundModule = await import(
-                '@genie/plugin-gmail/background'
+                '@nomi/plugin-gmail/background'
             );
             const { backgroundTask: gmailBackgroundTask } =
                 gmailBackgroundModule;
@@ -104,13 +104,13 @@ export function registerClientPlugins(): Promise<void> {
                 typeof gmailBackgroundTask,
             );
             const { GmailMainScreen } = await import(
-                '@genie/plugin-gmail/components/GmailMainScreen'
+                '@nomi/plugin-gmail/components/GmailMainScreen'
             );
             const { GmailSidebar } = await import(
-                '@genie/plugin-gmail/components/GmailSidebar'
+                '@nomi/plugin-gmail/components/GmailSidebar'
             );
             const { GmailPluginScreen } = await import(
-                '@genie/plugin-gmail/components/GmailPluginScreen'
+                '@nomi/plugin-gmail/components/GmailPluginScreen'
             );
 
             registerClientPlugin('gmail', {
@@ -139,10 +139,10 @@ export function registerClientPlugins(): Promise<void> {
         // IMAP Email
         try {
             const { imapEmailPlugin } = await import(
-                '@genie/plugin-imap_email/client'
+                '@nomi/plugin-imap_email/client'
             );
             const imapBackgroundModule = await import(
-                '@genie/plugin-imap_email/background'
+                '@nomi/plugin-imap_email/background'
             );
             const { backgroundTask: imapBackgroundTask } = imapBackgroundModule;
 
@@ -163,15 +163,15 @@ export function registerClientPlugins(): Promise<void> {
         // Calendar
         try {
             const { calendarPlugin } = await import(
-                '@genie/plugin-calendar/client'
+                '@nomi/plugin-calendar/client'
             );
             const calendarBackgroundModule = await import(
-                '@genie/plugin-calendar/background'
+                '@nomi/plugin-calendar/background'
             );
             const { backgroundTask: calendarBackgroundTask } =
                 calendarBackgroundModule;
             const { CalendarPluginScreen } = await import(
-                '@genie/plugin-calendar/components/CalendarPluginScreen'
+                '@nomi/plugin-calendar/components/CalendarPluginScreen'
             );
 
             registerClientPlugin('calendar', {
@@ -197,18 +197,18 @@ export function registerClientPlugins(): Promise<void> {
         // GitHub
         try {
             const { githubPlugin } = await import(
-                '@genie/plugin-github/client'
+                '@nomi/plugin-github/client'
             );
             const githubBackgroundModule = await import(
-                '@genie/plugin-github/background'
+                '@nomi/plugin-github/background'
             );
             const { backgroundTask: githubBackgroundTask } =
                 githubBackgroundModule;
             const { GithubMainScreen } = await import(
-                '@genie/plugin-github/components/GithubMainScreen'
+                '@nomi/plugin-github/components/GithubMainScreen'
             );
             const { GithubSidebarItem } = await import(
-                '@genie/plugin-github/components/GithubSidebarItem'
+                '@nomi/plugin-github/components/GithubSidebarItem'
             );
 
             registerClientPlugin('github', {
@@ -228,18 +228,18 @@ export function registerClientPlugins(): Promise<void> {
         // Telegram
         try {
             const { telegramPlugin } = await import(
-                '@genie/plugin-telegram/client'
+                '@nomi/plugin-telegram/client'
             );
             const telegramBackgroundModule = await import(
-                '@genie/plugin-telegram/background'
+                '@nomi/plugin-telegram/background'
             );
             const { backgroundTask: telegramBackgroundTask } =
                 telegramBackgroundModule;
             const { TelegramMainScreen } = await import(
-                '@genie/plugin-telegram/components/TelegramMainScreen'
+                '@nomi/plugin-telegram/components/TelegramMainScreen'
             );
             const { TelegramSidebarItem } = await import(
-                '@genie/plugin-telegram/components/TelegramSidebarItem'
+                '@nomi/plugin-telegram/components/TelegramSidebarItem'
             );
 
             registerClientPlugin('telegram', {
@@ -259,16 +259,16 @@ export function registerClientPlugins(): Promise<void> {
         // iOS Calendar
         try {
             const { iosCalendarPlugin } = await import(
-                '@genie/plugin-ios_calendar/client'
+                '@nomi/plugin-ios_calendar/client'
             );
             const iosCalendarBackgroundModule = await import(
-                '@genie/plugin-ios_calendar/background'
+                '@nomi/plugin-ios_calendar/background'
             );
             const { backgroundTask: iosCalendarBackgroundTask } =
                 iosCalendarBackgroundModule;
             const IOSCalendarPluginScreen = (
                 await import(
-                    '@genie/plugin-ios_calendar/components/IOSCalendarPluginScreen'
+                    '@nomi/plugin-ios_calendar/components/IOSCalendarPluginScreen'
                 )
             ).default;
 
@@ -290,10 +290,10 @@ export function registerClientPlugins(): Promise<void> {
         // iOS Reminders
         try {
             const { iosRemindersPlugin } = await import(
-                '@genie/plugin-ios_reminders/client'
+                '@nomi/plugin-ios_reminders/client'
             );
             const iosRemindersBackgroundModule = await import(
-                '@genie/plugin-ios_reminders/background'
+                '@nomi/plugin-ios_reminders/background'
             );
             const { backgroundTask: iosRemindersBackgroundTask } =
                 iosRemindersBackgroundModule;
@@ -315,10 +315,10 @@ export function registerClientPlugins(): Promise<void> {
         // iOS Contacts
         try {
             const { iosContactsPlugin } = await import(
-                '@genie/plugin-ios_contacts/client'
+                '@nomi/plugin-ios_contacts/client'
             );
             const iosContactsBackgroundModule = await import(
-                '@genie/plugin-ios_contacts/background'
+                '@nomi/plugin-ios_contacts/background'
             );
             const { backgroundTask: iosContactsBackgroundTask } =
                 iosContactsBackgroundModule;
@@ -340,10 +340,10 @@ export function registerClientPlugins(): Promise<void> {
         // iOS Health
         try {
             const { iosHealthPlugin } = await import(
-                '@genie/plugin-ios_health/client'
+                '@nomi/plugin-ios_health/client'
             );
             const iosHealthBackgroundModule = await import(
-                '@genie/plugin-ios_health/background'
+                '@nomi/plugin-ios_health/background'
             );
             const { backgroundTask: iosHealthBackgroundTask } =
                 iosHealthBackgroundModule;

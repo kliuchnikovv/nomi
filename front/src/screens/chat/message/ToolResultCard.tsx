@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Pressable, StyleSheet, Linking } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import { useChatOptional } from '../context';

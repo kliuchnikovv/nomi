@@ -10,7 +10,7 @@
 		13112A72D0FA9E6D45F5B7C2 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECD1B15595A118097F48B914 /* ExpoModulesProvider.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		26F0D9021DF607CEAD46ADA9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
-		30711E387DAF12D5B9B789DF /* libPods-genie.a in Frameworks */ = {isa = PBXBuildFile; fileRef = ED29F03D84E7A1DC13C12F6B /* libPods-genie.a */; };
+		30711E387DAF12D5B9B789DF /* libPods-nomi.a in Frameworks */ = {isa = PBXBuildFile; fileRef = ED29F03D84E7A1DC13C12F6B /* libPods-nomi.a */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		796AD9192F4CFF14001F9C89 /* IOSMailManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796AD9172F4CFF14001F9C89 /* IOSMailManager.swift */; };
 		796AD91A2F4CFF14001F9C89 /* IOSShortcutsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796AD9182F4CFF14001F9C89 /* IOSShortcutsManager.swift */; };
@@ -39,30 +39,30 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		13B07F961A680F5B00A75B9A /* genie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = genie.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = genie/Images.xcassets; sourceTree = "<group>"; };
-		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = genie/Info.plist; sourceTree = "<group>"; };
-		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = genie/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		74D8BF5D59F3A3FBE8DCD647 /* Pods-genie.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-genie.debug.xcconfig"; path = "Target Support Files/Pods-genie/Pods-genie.debug.xcconfig"; sourceTree = "<group>"; };
-		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = genie/AppDelegate.swift; sourceTree = "<group>"; };
-		79535990419E45FDAAF57E61 /* SplashScreen.storyboard */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = SplashScreen.storyboard; path = genie/SplashScreen.storyboard; sourceTree = "<group>"; };
-		796AD9172F4CFF14001F9C89 /* IOSMailManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSMailManager.swift; path = genie/IOSMailManager.swift; sourceTree = "<group>"; };
-		796AD9182F4CFF14001F9C89 /* IOSShortcutsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSShortcutsManager.swift; path = genie/IOSShortcutsManager.swift; sourceTree = "<group>"; };
-		79797DFD2F4393E90022FF81 /* DateExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DateExtensions.swift; path = genie/DateExtensions.swift; sourceTree = "<group>"; };
-		79797E012F4396200022FF81 /* IOSCalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSCalendarManager.swift; path = genie/IOSCalendarManager.swift; sourceTree = "<group>"; };
-		79797E022F4396200022FF81 /* IOSContactsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSContactsManager.swift; path = genie/IOSContactsManager.swift; sourceTree = "<group>"; };
-		79797E042F4396200022FF81 /* IOSRemindersManager.clean.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSRemindersManager.clean.swift; path = genie/IOSRemindersManager.clean.swift; sourceTree = "<group>"; };
-		79797EDD2F4396200022FF81 /* ProjectClassifierModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProjectClassifierModule.swift; path = genie/ProjectClassifierModule.swift; sourceTree = "<group>"; };
-		79A9FF3D2F438DAB00ED05DC /* genie-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "genie-Bridging-Header.h"; sourceTree = "<group>"; };
-		79A9FF402F438DE900ED05DC /* IOSHealthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSHealthManager.swift; path = genie/IOSHealthManager.swift; sourceTree = "<group>"; };
-		79A9FF412F438DE900ED05DC /* IOSNativeModules.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = IOSNativeModules.m; path = genie/IOSNativeModules.m; sourceTree = "<group>"; };
-		79A9FF482F438E3200ED05DC /* genie.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = genie.entitlements; path = genie/genie.entitlements; sourceTree = "<group>"; };
-		7AA0B1012F4D00110011AA10 /* NomiAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NomiAppIntents.swift; path = genie/NomiAppIntents.swift; sourceTree = "<group>"; };
-		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = genie/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		D3039251C689D2B66356D26C /* Pods-genie.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-genie.release.xcconfig"; path = "Target Support Files/Pods-genie/Pods-genie.release.xcconfig"; sourceTree = "<group>"; };
-		ECD1B15595A118097F48B914 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-genie/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		13B07F961A680F5B00A75B9A /* nomi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = nomi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = nomi/Images.xcassets; sourceTree = "<group>"; };
+		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = nomi/Info.plist; sourceTree = "<group>"; };
+		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = nomi/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		74D8BF5D59F3A3FBE8DCD647 /* Pods-nomi.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-nomi.debug.xcconfig"; path = "Target Support Files/Pods-nomi/Pods-nomi.debug.xcconfig"; sourceTree = "<group>"; };
+		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = nomi/AppDelegate.swift; sourceTree = "<group>"; };
+		79535990419E45FDAAF57E61 /* SplashScreen.storyboard */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = SplashScreen.storyboard; path = nomi/SplashScreen.storyboard; sourceTree = "<group>"; };
+		796AD9172F4CFF14001F9C89 /* IOSMailManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSMailManager.swift; path = nomi/IOSMailManager.swift; sourceTree = "<group>"; };
+		796AD9182F4CFF14001F9C89 /* IOSShortcutsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSShortcutsManager.swift; path = nomi/IOSShortcutsManager.swift; sourceTree = "<group>"; };
+		79797DFD2F4393E90022FF81 /* DateExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DateExtensions.swift; path = nomi/DateExtensions.swift; sourceTree = "<group>"; };
+		79797E012F4396200022FF81 /* IOSCalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSCalendarManager.swift; path = nomi/IOSCalendarManager.swift; sourceTree = "<group>"; };
+		79797E022F4396200022FF81 /* IOSContactsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSContactsManager.swift; path = nomi/IOSContactsManager.swift; sourceTree = "<group>"; };
+		79797E042F4396200022FF81 /* IOSRemindersManager.clean.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSRemindersManager.clean.swift; path = nomi/IOSRemindersManager.clean.swift; sourceTree = "<group>"; };
+		79797EDD2F4396200022FF81 /* ProjectClassifierModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProjectClassifierModule.swift; path = nomi/ProjectClassifierModule.swift; sourceTree = "<group>"; };
+		79A9FF3D2F438DAB00ED05DC /* nomi-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "nomi-Bridging-Header.h"; sourceTree = "<group>"; };
+		79A9FF402F438DE900ED05DC /* IOSHealthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSHealthManager.swift; path = nomi/IOSHealthManager.swift; sourceTree = "<group>"; };
+		79A9FF412F438DE900ED05DC /* IOSNativeModules.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = IOSNativeModules.m; path = nomi/IOSNativeModules.m; sourceTree = "<group>"; };
+		79A9FF482F438E3200ED05DC /* nomi.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = nomi.entitlements; path = nomi/nomi.entitlements; sourceTree = "<group>"; };
+		7AA0B1012F4D00110011AA10 /* NomiAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NomiAppIntents.swift; path = nomi/NomiAppIntents.swift; sourceTree = "<group>"; };
+		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = nomi/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		D3039251C689D2B66356D26C /* Pods-nomi.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-nomi.release.xcconfig"; path = "Target Support Files/Pods-nomi/Pods-nomi.release.xcconfig"; sourceTree = "<group>"; };
+		ECD1B15595A118097F48B914 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-nomi/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		ED29F03D84E7A1DC13C12F6B /* libPods-genie.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-genie.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		ED29F03D84E7A1DC13C12F6B /* libPods-nomi.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-nomi.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,14 +70,14 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				30711E387DAF12D5B9B789DF /* libPods-genie.a in Frameworks */,
+				30711E387DAF12D5B9B789DF /* libPods-nomi.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		13B07FAE1A68108700A75B9A /* genie */ = {
+		13B07FAE1A68108700A75B9A /* nomi */ = {
 			isa = PBXGroup;
 			children = (
 				79797E012F4396200022FF81 /* IOSCalendarManager.swift */,
@@ -87,34 +87,34 @@
 				79797E022F4396200022FF81 /* IOSContactsManager.swift */,
 				79797E042F4396200022FF81 /* IOSRemindersManager.clean.swift */,
 				79797DFD2F4393E90022FF81 /* DateExtensions.swift */,
-				79A9FF482F438E3200ED05DC /* genie.entitlements */,
+				79A9FF482F438E3200ED05DC /* nomi.entitlements */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
-				79A9FF3D2F438DAB00ED05DC /* genie-Bridging-Header.h */,
+				79A9FF3D2F438DAB00ED05DC /* nomi-Bridging-Header.h */,
 				79A9FF402F438DE900ED05DC /* IOSHealthManager.swift */,
 				79A9FF412F438DE900ED05DC /* IOSNativeModules.m */,
 				79797EDD2F4396200022FF81 /* ProjectClassifierModule.swift */,
 				79535990419E45FDAAF57E61 /* SplashScreen.storyboard */,
 			);
-			name = genie;
+			name = nomi;
 			sourceTree = "<group>";
 		};
-		275FFE3F78B4B315137FF735 /* genie */ = {
+		275FFE3F78B4B315137FF735 /* nomi */ = {
 			isa = PBXGroup;
 			children = (
 				ECD1B15595A118097F48B914 /* ExpoModulesProvider.swift */,
 			);
-			name = genie;
+			name = nomi;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				ED29F03D84E7A1DC13C12F6B /* libPods-genie.a */,
+				ED29F03D84E7A1DC13C12F6B /* libPods-nomi.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -137,7 +137,7 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
-				13B07FAE1A68108700A75B9A /* genie */,
+				13B07FAE1A68108700A75B9A /* nomi */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
@@ -153,7 +153,7 @@
 		83CBBA001A601CBA00E9B192 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				13B07F961A680F5B00A75B9A /* genie.app */,
+				13B07F961A680F5B00A75B9A /* nomi.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -161,7 +161,7 @@
 		90648BC6E87765B8CD738A3B /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				275FFE3F78B4B315137FF735 /* genie */,
+				275FFE3F78B4B315137FF735 /* nomi */,
 			);
 			name = ExpoModulesProviders;
 			sourceTree = "<group>";
@@ -169,8 +169,8 @@
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				74D8BF5D59F3A3FBE8DCD647 /* Pods-genie.debug.xcconfig */,
-				D3039251C689D2B66356D26C /* Pods-genie.release.xcconfig */,
+				74D8BF5D59F3A3FBE8DCD647 /* Pods-nomi.debug.xcconfig */,
+				D3039251C689D2B66356D26C /* Pods-nomi.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -178,9 +178,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		13B07F861A680F5B00A75B9A /* genie */ = {
+		13B07F861A680F5B00A75B9A /* nomi */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "genie" */;
+			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "nomi" */;
 			buildPhases = (
 				5B5326F989354DC315EDF3AD /* [CP] Check Pods Manifest.lock */,
 				25E3A4B59362C4B75B141F99 /* [Expo] Configure project */,
@@ -197,9 +197,9 @@
 			);
 			dependencies = (
 			);
-			name = genie;
-			productName = genie;
-			productReference = 13B07F961A680F5B00A75B9A /* genie.app */;
+			name = nomi;
+			productName = nomi;
+			productReference = 13B07F961A680F5B00A75B9A /* nomi.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -217,7 +217,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "genie" */;
+			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "nomi" */;
 			compatibilityVersion = "Xcode 12.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -230,7 +230,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				13B07F861A680F5B00A75B9A /* genie */,
+				13B07F861A680F5B00A75B9A /* nomi */,
 			);
 		};
 /* End PBXProject section */
@@ -276,18 +276,18 @@
 			inputPaths = (
 				"$(SRCROOT)/.xcode.env",
 				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/genie/genie.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-genie/expo-configure-project.sh",
+				"$(SRCROOT)/nomi/nomi.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-nomi/expo-configure-project.sh",
 			);
 			name = "[Expo] Configure project";
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-genie/ExpoModulesProvider.swift",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-nomi/ExpoModulesProvider.swift",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-genie/expo-configure-project.sh\"\n";
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-nomi/expo-configure-project.sh\"\n";
 		};
 		5B5326F989354DC315EDF3AD /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -304,7 +304,7 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-genie-checkManifestLockResult.txt",
+				"$(DERIVED_FILE_DIR)/Pods-nomi-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -317,15 +317,15 @@
 			files = (
 			);
 			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+				"${PODS_ROOT}/Target Support Files/Pods-nomi/Pods-nomi-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+				"${PODS_ROOT}/Target Support Files/Pods-nomi/Pods-nomi-frameworks-${CONFIGURATION}-output-files.xcfilelist",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-frameworks.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-nomi/Pods-nomi-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		D688C16EE9655961E0D8346D /* [CP] Copy Pods Resources */ = {
@@ -334,15 +334,15 @@
 			files = (
 			);
 			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-resources-${CONFIGURATION}-input-files.xcfilelist",
+				"${PODS_ROOT}/Target Support Files/Pods-nomi/Pods-nomi-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-resources-${CONFIGURATION}-output-files.xcfilelist",
+				"${PODS_ROOT}/Target Support Files/Pods-nomi/Pods-nomi-resources-${CONFIGURATION}-output-files.xcfilelist",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-resources.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-nomi/Pods-nomi-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		FA5175E1000000000ABCDEF1 /* Link _node_modules → node_modules (monorepo asset path fix) */ = {
@@ -387,16 +387,16 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 74D8BF5D59F3A3FBE8DCD647 /* Pods-genie.debug.xcconfig */;
+			baseConfigurationReference = 74D8BF5D59F3A3FBE8DCD647 /* Pods-nomi.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = genie/genie.entitlements;
+				CODE_SIGN_ENTITLEMENTS = nomi/nomi.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
-				INFOPLIST_FILE = genie/Info.plist;
+				INFOPLIST_FILE = nomi/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -412,7 +412,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.kliuchnikovv.nomi;
 				PRODUCT_NAME = Nomi;
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "genie-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "nomi-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -422,15 +422,15 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = D3039251C689D2B66356D26C /* Pods-genie.release.xcconfig */;
+			baseConfigurationReference = D3039251C689D2B66356D26C /* Pods-nomi.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = genie/genie.entitlements;
+				CODE_SIGN_ENTITLEMENTS = nomi/nomi.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				INFOPLIST_FILE = genie/Info.plist;
+				INFOPLIST_FILE = nomi/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -446,7 +446,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.kliuchnikovv.nomi;
 				PRODUCT_NAME = Nomi;
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "genie-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "nomi-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -607,7 +607,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "genie" */ = {
+		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "nomi" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
@@ -616,7 +616,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "genie" */ = {
+		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "nomi" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,

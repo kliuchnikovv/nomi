@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Github } from 'iconoir-react-native';
-import { useTheme } from '@genie/front/context/ThemeContext';
-import { ThemePalette } from '@genie/front/themes/types';
-import { PluginSidebarProps } from '@genie/front/plugins/types';
+import { useTheme } from '@nomi/front/context/ThemeContext';
+import { ThemePalette } from '@nomi/front/themes/types';
+import { PluginSidebarProps } from '@nomi/front/plugins/types';
 
 export function GithubSidebarItem({ integrationId, onSelect, isSelected }: PluginSidebarProps) {
     const { theme, palette } = useTheme();

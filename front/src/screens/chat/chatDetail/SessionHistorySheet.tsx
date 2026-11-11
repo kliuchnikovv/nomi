@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { chatsApi } from '../../../apiClient';
 import type { Chat } from '../../main/models';
 import { useMain } from '../../main/context';

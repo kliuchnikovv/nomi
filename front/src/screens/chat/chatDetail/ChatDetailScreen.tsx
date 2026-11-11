@@ -17,7 +17,7 @@ import {
     TouchableWithoutFeedback,
     Keyboard,
 } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,

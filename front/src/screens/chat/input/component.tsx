@@ -41,7 +41,7 @@ import {
     Alert,
     NativeModules,
 } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createStyles } from './styles.tsx';

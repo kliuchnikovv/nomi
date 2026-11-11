@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/mux"
-	"github.com/kliuchnikovv/genie-api/internal/auth"
+	"github.com/kliuchnikovv/nomi-api/internal/auth"
 )
 
 // wrap converts a standard http.HandlerFunc into a gin.HandlerFunc and

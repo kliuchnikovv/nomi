@@ -1,6 +1,6 @@
 //
 //  IOSMailManager.swift
-//  Genie
+//  Nomi
 //
 //  IMAP/SMTP Email Manager for universal email integration
 //
@@ -15,7 +15,7 @@ class IOSMailManager: NSObject {
     // MARK: - Connection helpers
 
     private func makeConnection(host: String, port: UInt16, useTLS: Bool) -> (NWConnection, DispatchQueue) {
-        let queue = DispatchQueue(label: "com.genie.imap.\(host):\(port).\(UUID().uuidString)")
+        let queue = DispatchQueue(label: "com.nomi.imap.\(host):\(port).\(UUID().uuidString)")
         let conn = NWConnection(
             host: NWEndpoint.Host(host),
             port: NWEndpoint.Port(rawValue: port)!,
@@ -417,7 +417,7 @@ class IOSMailManager: NSObject {
         let from = message["from"] as? String ?? user
 
         Task {
-            let queue = DispatchQueue(label: "com.genie.smtp.\(host):\(port)")
+            let queue = DispatchQueue(label: "com.nomi.smtp.\(host):\(port)")
             let conn = NWConnection(host: NWEndpoint.Host(host),
                                     port: NWEndpoint.Port(rawValue: port)!,
                                     using: tls ? .tls : .tcp)

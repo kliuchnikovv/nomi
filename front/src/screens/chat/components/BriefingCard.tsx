@@ -6,7 +6,7 @@ import {
     ActivityIndicator,
     Linking,
 } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { briefingGenerator } from '../../../services/briefing/BriefingGenerator';

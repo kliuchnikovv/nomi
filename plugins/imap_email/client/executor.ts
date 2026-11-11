@@ -2,8 +2,8 @@
  * IMAP Email client plugin: executes IMAP/SMTP tool actions.
  */
 
-import type { ClientPluginHandler } from '@genie/front/plugins/clientRegistry';
-import { imapEmailClient } from '@genie/front/services/integrations/clients/IMAPEmailClient';
+import type { ClientPluginHandler } from '@nomi/front/plugins/clientRegistry';
+import { imapEmailClient } from '@nomi/front/services/integrations/clients/IMAPEmailClient';
 
 export const imapEmailPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {

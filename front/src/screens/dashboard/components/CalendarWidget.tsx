@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
-import { Card, Text } from '@genie/ds';
+import { Card, Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 
 // Monday-first: M T W T F S S

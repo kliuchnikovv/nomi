@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/chat" // Added for logging
+	"github.com/kliuchnikovv/nomi-api/internal/chat" // Added for logging
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

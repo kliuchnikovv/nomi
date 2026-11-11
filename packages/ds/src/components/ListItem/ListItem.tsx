@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
 
-import type { ThemeDescriptor } from '@genie/front/themes/types';
+import type { ThemeDescriptor } from '@nomi/front/themes/types';
 
 import { Text } from '../Text';
 

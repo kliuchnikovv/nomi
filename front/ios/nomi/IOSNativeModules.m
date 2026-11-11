@@ -1,6 +1,6 @@
 //
 //  IOSNativeModules.m
-//  Genie
+//  Nomi
 //
 //  Native module bridge for iOS Calendar, Reminders, and Contacts managers
 //

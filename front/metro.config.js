@@ -24,101 +24,101 @@ const config = {
         ],
         // Ensure we resolve workspace packages
         extraNodeModules: {
-            '@genie/front': path.resolve(__dirname, 'src'),
-            '@genie/ds': path.resolve(__dirname, '../packages/ds/src'),
-            '@genie/plugin-gmail': path.resolve(__dirname, '../plugins/gmail'),
-            '@genie/plugin-calendar': path.resolve(
+            '@nomi/front': path.resolve(__dirname, 'src'),
+            '@nomi/ds': path.resolve(__dirname, '../packages/ds/src'),
+            '@nomi/plugin-gmail': path.resolve(__dirname, '../plugins/gmail'),
+            '@nomi/plugin-calendar': path.resolve(
                 __dirname,
                 '../plugins/calendar',
             ),
-            '@genie/plugin-github': path.resolve(
+            '@nomi/plugin-github': path.resolve(
                 __dirname,
                 '../plugins/github',
             ),
-            '@genie/plugin-telegram': path.resolve(
+            '@nomi/plugin-telegram': path.resolve(
                 __dirname,
                 '../plugins/telegram',
             ),
-            '@genie/plugin-ios_calendar': path.resolve(
+            '@nomi/plugin-ios_calendar': path.resolve(
                 __dirname,
                 '../plugins/ios_calendar',
             ),
-            '@genie/plugin-ios_reminders': path.resolve(
+            '@nomi/plugin-ios_reminders': path.resolve(
                 __dirname,
                 '../plugins/ios_reminders',
             ),
-            '@genie/plugin-ios_contacts': path.resolve(
+            '@nomi/plugin-ios_contacts': path.resolve(
                 __dirname,
                 '../plugins/ios_contacts',
             ),
-            '@genie/plugin-ios_health': path.resolve(
+            '@nomi/plugin-ios_health': path.resolve(
                 __dirname,
                 '../plugins/ios_health',
             ),
         },
         // Support for TypeScript path aliases
         alias: {
-            '@genie/front': path.resolve(__dirname, 'src'),
-            '@genie/ds': path.resolve(__dirname, '../packages/ds/src'),
-            '@genie/ds/*': path.resolve(__dirname, '../packages/ds/src/*'),
-            '@genie/plugin-gmail': path.resolve(__dirname, '../plugins/gmail'),
-            '@genie/plugin-gmail/*': path.resolve(
+            '@nomi/front': path.resolve(__dirname, 'src'),
+            '@nomi/ds': path.resolve(__dirname, '../packages/ds/src'),
+            '@nomi/ds/*': path.resolve(__dirname, '../packages/ds/src/*'),
+            '@nomi/plugin-gmail': path.resolve(__dirname, '../plugins/gmail'),
+            '@nomi/plugin-gmail/*': path.resolve(
                 __dirname,
                 '../plugins/gmail/*',
             ),
-            '@genie/plugin-calendar': path.resolve(
+            '@nomi/plugin-calendar': path.resolve(
                 __dirname,
                 '../plugins/calendar',
             ),
-            '@genie/plugin-calendar/*': path.resolve(
+            '@nomi/plugin-calendar/*': path.resolve(
                 __dirname,
                 '../plugins/calendar/*',
             ),
-            '@genie/plugin-github': path.resolve(
+            '@nomi/plugin-github': path.resolve(
                 __dirname,
                 '../plugins/github',
             ),
-            '@genie/plugin-github/*': path.resolve(
+            '@nomi/plugin-github/*': path.resolve(
                 __dirname,
                 '../plugins/github/*',
             ),
-            '@genie/plugin-telegram': path.resolve(
+            '@nomi/plugin-telegram': path.resolve(
                 __dirname,
                 '../plugins/telegram',
             ),
-            '@genie/plugin-telegram/*': path.resolve(
+            '@nomi/plugin-telegram/*': path.resolve(
                 __dirname,
                 '../plugins/telegram/*',
             ),
-            '@genie/plugin-ios_calendar': path.resolve(
+            '@nomi/plugin-ios_calendar': path.resolve(
                 __dirname,
                 '../plugins/ios_calendar',
             ),
-            '@genie/plugin-ios_calendar/*': path.resolve(
+            '@nomi/plugin-ios_calendar/*': path.resolve(
                 __dirname,
                 '../plugins/ios_calendar/*',
             ),
-            '@genie/plugin-ios_reminders': path.resolve(
+            '@nomi/plugin-ios_reminders': path.resolve(
                 __dirname,
                 '../plugins/ios_reminders',
             ),
-            '@genie/plugin-ios_reminders/*': path.resolve(
+            '@nomi/plugin-ios_reminders/*': path.resolve(
                 __dirname,
                 '../plugins/ios_reminders/*',
             ),
-            '@genie/plugin-ios_contacts': path.resolve(
+            '@nomi/plugin-ios_contacts': path.resolve(
                 __dirname,
                 '../plugins/ios_contacts',
             ),
-            '@genie/plugin-ios_contacts/*': path.resolve(
+            '@nomi/plugin-ios_contacts/*': path.resolve(
                 __dirname,
                 '../plugins/ios_contacts/*',
             ),
-            '@genie/plugin-ios_health': path.resolve(
+            '@nomi/plugin-ios_health': path.resolve(
                 __dirname,
                 '../plugins/ios_health',
             ),
-            '@genie/plugin-ios_health/*': path.resolve(
+            '@nomi/plugin-ios_health/*': path.resolve(
                 __dirname,
                 '../plugins/ios_health/*',
             ),

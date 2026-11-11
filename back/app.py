@@ -139,9 +139,9 @@ except Exception as e:
     raise
 
 # Initialize ToolConfigClient singleton for GET /commands endpoint
-# Points to Go API at localhost:8000 by default; override with GENIE_API_BASE_URL env var
+# Points to Go API at localhost:8000 by default; override with NOMI_API_BASE_URL env var
 _tool_config_client = ToolConfigClient(
-    base_url=os.getenv("GENIE_API_BASE_URL", "http://localhost:8000")
+    base_url=os.getenv("NOMI_API_BASE_URL", "http://localhost:8000")
 )
 
 

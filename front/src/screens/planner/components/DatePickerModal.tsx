@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, View, TouchableOpacity, StyleSheet } from 'react-native';
 import { NavArrowLeft, NavArrowRight } from 'iconoir-react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import {
     MONTHS_EN,

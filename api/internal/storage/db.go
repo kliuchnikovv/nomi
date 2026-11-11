@@ -3,7 +3,7 @@ package storage
 import (
 	"fmt"
 
-	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/nomi-api/internal/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
