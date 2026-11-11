@@ -306,6 +306,12 @@ export function ChatProvider({
     const [showMemberResponses, setShowMemberResponses] =
         useState<boolean>(true);
     const [detailLevel, setDetailLevelInternal] = useState<DetailLevel>('all');
+    // Team-mode is opt-in — an experimental multi-agent flow. Off by default;
+    // toggle lives in the composer's plus-menu and is persisted so it survives
+    // relaunches. When off, the team pill / picker is hidden and outgoing
+    // messages carry no team `command`.
+    const [teamModeEnabled, setTeamModeEnabledInternal] =
+        useState<boolean>(false);
 
     // Load persisted detail level on mount
     useEffect(() => {
@@ -317,7 +323,18 @@ export function ChatProvider({
                 setDetailLevel(saved as DetailLevel);
             }
         });
+        AsyncStorage.getItem('@genie_team_mode_enabled').then(saved => {
+            if (saved === '1') setTeamModeEnabledInternal(true);
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const setTeamModeEnabled = useCallback((next: boolean) => {
+        setTeamModeEnabledInternal(next);
+        AsyncStorage.setItem(
+            '@genie_team_mode_enabled',
+            next ? '1' : '0',
+        ).catch(() => {});
     }, []);
 
     const setDetailLevel = useCallback((level: DetailLevel) => {
@@ -2312,6 +2329,8 @@ export function ChatProvider({
         setShowMemberResponses,
         detailLevel,
         setDetailLevel,
+        teamModeEnabled,
+        setTeamModeEnabled,
         activeAgentsCount,
         pendingInputText,
         setPendingInputText,

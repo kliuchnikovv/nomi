@@ -199,15 +199,10 @@ export function ChatDetailScreen() {
     // and stop() runs on exit via unmount.
     const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
     const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+    const [voiceSpeakingChunk, setVoiceSpeakingChunk] = useState('');
     const voiceInterruptRef = useRef<() => void>(() => {});
     const enterVoice = useCallback(() => setInputMode('voice'), []);
     const exitVoice = useCallback(() => setInputMode('text'), []);
-    // Tap anywhere in the thread while the assistant is speaking to barge in.
-    const handleThreadTap = useCallback(() => {
-        if (inputMode === 'voice' && voiceState === 'speaking') {
-            voiceInterruptRef.current();
-        }
-    }, [inputMode, voiceState]);
     // Reset to text when switching chats so a stale voice session doesn't
     // survive across sessions. Honor the `startVoice` param (e.g. from a
     // voice deep-link) once per screen instance.
@@ -216,6 +211,17 @@ export function ChatDetailScreen() {
         setInputMode(routeStartVoice ? 'voice' : 'text');
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [chatId]);
+
+    // Id of the newest assistant message — used by the renderer to reliably
+    // decorate the message Nomi is currently speaking in voice mode.
+    // `messages` is stored oldest-first, so reverse before find() to get the
+    // latest (same pattern as useVoiceConversation.assistantText).
+    const latestAssistantId = useMemo(() => {
+        for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i].role === 'assistant') return messages[i].id;
+        }
+        return undefined;
+    }, [messages]);
 
     const styles = useMemo(() => createStyles(theme), [theme]);
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
@@ -787,6 +793,12 @@ export function ChatDetailScreen() {
         voiceSpeaking:
             inputMode === 'voice' &&
             (voiceState === 'speaking' || voiceState === 'processing'),
+        speakingMessageId: latestAssistantId,
+        speakingChunk: inputMode === 'voice' ? voiceSpeakingChunk : '',
+        onSpeakingTap:
+            inputMode === 'voice'
+                ? () => voiceInterruptRef.current()
+                : undefined,
     });
 
     const isUpdatesChat = activeChat?.chat_type === 'updates';
@@ -1165,11 +1177,6 @@ export function ChatDetailScreen() {
                     flex: 1,
                     backgroundColor: theme.background,
                 }}
-                onTouchStart={
-                    inputMode === 'voice' && voiceState === 'speaking'
-                        ? handleThreadTap
-                        : undefined
-                }
             >
                 {showEmptyGreeting ? (
                     <KeyboardAvoidingView
@@ -1356,6 +1363,7 @@ export function ChatDetailScreen() {
                             chatId={chatId}
                             onExit={exitVoice}
                             onStateChange={setVoiceState}
+                            onSpeakingChunkChange={setVoiceSpeakingChunk}
                             interruptRef={voiceInterruptRef}
                         />
                     ) : (
@@ -1600,6 +1608,7 @@ type VoiceModeHostProps = {
     chatId: string;
     onExit: () => void;
     onStateChange: (state: VoiceState) => void;
+    onSpeakingChunkChange: (chunk: string) => void;
     interruptRef: React.MutableRefObject<() => void>;
 };
 
@@ -1607,13 +1616,19 @@ function VoiceModeHost({
     chatId,
     onExit,
     onStateChange,
+    onSpeakingChunkChange,
     interruptRef,
 }: VoiceModeHostProps) {
-    const { state, interrupt, stop } = useVoiceConversation({ chatId });
+    const { state, interrupt, stop, muted, setMuted, speakingChunk } =
+        useVoiceConversation({ chatId });
 
     useEffect(() => {
         onStateChange(state);
     }, [state, onStateChange]);
+
+    useEffect(() => {
+        onSpeakingChunkChange(speakingChunk);
+    }, [speakingChunk, onSpeakingChunkChange]);
 
     useEffect(() => {
         interruptRef.current = interrupt;
@@ -1624,15 +1639,19 @@ function VoiceModeHost({
         onExit();
     }, [stop, onExit]);
 
+    // Mic button toggles mute (agent stops listening) — barge-in on speaking
+    // is available via a tap on the thread itself.
     const handleMicPress = useCallback(() => {
-        if (state === 'speaking') interrupt();
-    }, [state, interrupt]);
+        setMuted(!muted);
+    }, [muted, setMuted]);
 
     return (
         <VoiceDock
             state={state}
+            muted={muted}
             onExit={handleExit}
             onMicPress={handleMicPress}
+            onInterrupt={interrupt}
         />
     );
 }

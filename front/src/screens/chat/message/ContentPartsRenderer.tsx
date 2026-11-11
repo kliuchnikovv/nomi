@@ -121,14 +121,73 @@ const StreamingTextPart = memo(function StreamingTextPart({
     markdownStyles,
     onLongPress,
     isStreaming = false,
+    speakingChunk,
+    onSpeakingTap,
+    speakingTheme,
 }: {
     text: string;
     simpleStyles: any;
     markdownStyles: any;
     onLongPress: (text: string) => void;
     isStreaming?: boolean;
+    /** Substring of `text` currently being voiced by TTS — highlighted in
+     *  an animated accent color for a karaoke follow-along. */
+    speakingChunk?: string;
+    /** Tap on the decorated text triggers this (used to barge-in). */
+    onSpeakingTap?: () => void;
+    /** Theme colors needed for karaoke tinting. */
+    speakingTheme?: { accent: string; accentAlt: string; textPrimary: string };
 }) {
     const cursorOpacity = useRef(new Animated.Value(1)).current;
+    const karaokeAnim = useRef(new Animated.Value(0)).current;
+
+    const isSpeaking = !!speakingChunk && !!speakingTheme;
+    useEffect(() => {
+        if (!isSpeaking) return;
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(karaokeAnim, {
+                    toValue: 1,
+                    duration: 900,
+                    useNativeDriver: false,
+                }),
+                Animated.timing(karaokeAnim, {
+                    toValue: 0,
+                    duration: 900,
+                    useNativeDriver: false,
+                }),
+            ]),
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [isSpeaking, karaokeAnim]);
+
+    // Locate `speakingChunk` inside `text` with whitespace-tolerant regex
+    // so newlines/markdown in the raw reply don't defeat the highlight.
+    const karaokeRange = useMemo(() => {
+        if (!speakingChunk) return null;
+        const trimmed = speakingChunk.trim();
+        if (!trimmed) return null;
+        const escaped = trimmed
+            .split(/\s+/)
+            .filter(Boolean)
+            .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+            .join('\\s+');
+        try {
+            const m = new RegExp(escaped).exec(text);
+            if (m) return { start: m.index, end: m.index + m[0].length };
+        } catch {
+            /* bad regex — no highlight */
+        }
+        return null;
+    }, [speakingChunk, text]);
+
+    const karaokeColor = speakingTheme
+        ? (karaokeAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [speakingTheme.accentAlt, speakingTheme.accent],
+          }) as any)
+        : null;
 
     useEffect(() => {
         if (isStreaming) {
@@ -189,16 +248,53 @@ const StreamingTextPart = memo(function StreamingTextPart({
         );
     }
 
-    // Fast path: plain text rendering
+    // Fast path: plain text rendering. In voice mode with a live speaking
+    // chunk, split the text into 3 spans and animate the middle one.
+    const textStyle = isSpeaking
+        ? [
+              simpleStyles.text,
+              speakingTheme
+                  ? {
+                        fontSize: 17,
+                        lineHeight: 24,
+                        color: speakingTheme.textPrimary,
+                    }
+                  : null,
+          ]
+        : simpleStyles.text;
+
+    if (karaokeRange && karaokeColor) {
+        const before = text.slice(0, karaokeRange.start);
+        const during = text.slice(karaokeRange.start, karaokeRange.end);
+        const after = text.slice(karaokeRange.end);
+        return (
+            <Pressable
+                onPress={onSpeakingTap}
+                onLongPress={() => onLongPress(text)}
+                delayLongPress={250}
+                style={({ pressed }) => [pressed && { opacity: 0.75 }]}
+            >
+                <Text style={textStyle as any}>
+                    {before}
+                    <Animated.Text style={{ color: karaokeColor }}>
+                        {during}
+                    </Animated.Text>
+                    {after}
+                </Text>
+            </Pressable>
+        );
+    }
+
     return (
         <Pressable
+            onPress={onSpeakingTap}
             onLongPress={() => onLongPress(text)}
             delayLongPress={250}
             style={({ pressed }) => [pressed && { opacity: 0.75 }]}
         >
-            <Text style={simpleStyles.text}>
+            <Text style={textStyle as any}>
                 {text}
-                {isStreaming && (
+                {isStreaming && !isSpeaking && (
                     <Animated.Text style={{ opacity: cursorOpacity }}>
                         ▋
                     </Animated.Text>
@@ -211,13 +307,18 @@ const StreamingTextPart = memo(function StreamingTextPart({
 // Memoized component for tool calls and reasoning — rendered inline, no outer wrapper
 const ToolCallsGroup = memo(function ToolCallsGroup({
     parts,
+    showToolCalls = true,
+    showReasoning = true,
 }: {
     parts: ContentPart[];
+    showToolCalls?: boolean;
+    showReasoning?: boolean;
 }) {
     return (
         <>
             {parts.map((part, index) => {
                 if (part.type === 'tool_call') {
+                    if (!showToolCalls) return null;
                     const CustomElement = getChatElementComponent(
                         part.tool_call.name,
                     );
@@ -255,6 +356,7 @@ const ToolCallsGroup = memo(function ToolCallsGroup({
                         />
                     );
                 } else if (part.type === 'reasoning') {
+                    if (!showReasoning) return null;
                     return (
                         <ReasoningBlock
                             key={`reasoning-${index}`}
@@ -281,6 +383,7 @@ function useProcessedParts(
     parts: ContentPart[],
     showToolCalls: boolean,
     showReasoning: boolean,
+    showMemberResponses: boolean,
 ) {
     return useMemo(() => {
         if (!parts || parts.length === 0) return [];
@@ -298,6 +401,11 @@ function useProcessedParts(
         for (const part of parts) {
             if (part.type === 'tool_call' && !showToolCalls) continue;
             if (part.type === 'reasoning' && !showReasoning) continue;
+            if (
+                (part as any).type === 'member_response' &&
+                !showMemberResponses
+            )
+                continue;
 
             const isTextLike =
                 part.type === 'text' ||
@@ -318,7 +426,7 @@ function useProcessedParts(
 
         flushGroup();
         return result;
-    }, [parts, showToolCalls, showReasoning]);
+    }, [parts, showToolCalls, showReasoning, showMemberResponses]);
 }
 
 // Detect if streaming is active by checking for incomplete text parts
@@ -337,15 +445,27 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
     onLongPress,
     showToolCalls: showToolCallsProp,
     showReasoning: showReasoningProp,
+    showMemberResponses: showMemberResponsesProp,
+    speakingChunk,
+    onSpeakingTap,
 }: {
     parts: ContentPart[];
     onLongPress: (text: string) => void;
     showToolCalls?: boolean;
     showReasoning?: boolean;
+    showMemberResponses?: boolean;
+    /** When set, the last text group is rendered with a karaoke-style
+     *  highlight over the currently-spoken chunk (see StreamingTextPart). */
+    speakingChunk?: string;
+    /** Called when the user taps a decorated text group — used to interrupt
+     *  TTS playback. */
+    onSpeakingTap?: () => void;
 }) {
     const chat = useChatOptional();
     const showToolCalls = showToolCallsProp ?? chat?.showToolCalls ?? true;
     const showReasoning = showReasoningProp ?? chat?.showReasoning ?? true;
+    const showMemberResponses =
+        showMemberResponsesProp ?? chat?.showMemberResponses ?? true;
     const { theme } = useTheme();
 
     // Simple styles for fast text rendering
@@ -355,7 +475,12 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
 
     // Process parts into groups - memoized
-    const groupedParts = useProcessedParts(parts, showToolCalls, showReasoning);
+    const groupedParts = useProcessedParts(
+        parts,
+        showToolCalls,
+        showReasoning,
+        showMemberResponses,
+    );
 
     // Detect if we're currently streaming — gate the heuristic on the real
     // generation signal so completed replies (e.g. slash commands) don't keep
@@ -364,10 +489,29 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
         useMemo(() => isStreamingActive(parts), [parts]) &&
         !!chat?.assistantWorking;
 
+    // Index of the last text group — only that group gets the karaoke
+    // decoration so we don't highlight the same chunk in multiple places.
+    const lastTextIdx = useMemo(() => {
+        for (let i = groupedParts.length - 1; i >= 0; i--) {
+            if (groupedParts[i].type === 'text') return i;
+        }
+        return -1;
+    }, [groupedParts]);
+
+    const speakingTheme = useMemo(
+        () => ({
+            accent: theme.accent,
+            accentAlt: theme.accentAlt,
+            textPrimary: theme.textPrimary ?? theme.text,
+        }),
+        [theme.accent, theme.accentAlt, theme.textPrimary, theme.text],
+    );
+
     return (
         <>
             {groupedParts.map((group, index) => {
                 if (group.type === 'text') {
+                    const decorate = index === lastTextIdx && !!speakingChunk;
                     return (
                         <StreamingTextPart
                             key={`text-${index}-${group.text.length}`}
@@ -376,6 +520,9 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
                             markdownStyles={markdownStyles as any}
                             onLongPress={onLongPress}
                             isStreaming={streaming}
+                            speakingChunk={decorate ? speakingChunk : undefined}
+                            onSpeakingTap={decorate ? onSpeakingTap : undefined}
+                            speakingTheme={decorate ? speakingTheme : undefined}
                         />
                     );
                 } else {
@@ -383,6 +530,8 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
                         <ToolCallsGroup
                             key={`group-${index}`}
                             parts={group.parts}
+                            showToolCalls={showToolCalls}
+                            showReasoning={showReasoning}
                         />
                     );
                 }

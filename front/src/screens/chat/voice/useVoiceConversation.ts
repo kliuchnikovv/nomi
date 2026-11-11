@@ -53,6 +53,16 @@ export interface UseVoiceConversationResult {
     interrupt(): void;
     stop(): void;
     openSettings(): void;
+    /** True while the mic is paused (the recognizer is torn down and won't
+     *  auto-restart until unmuted). TTS still plays; the voice session stays
+     *  open — unlike stop(), which fully tears down. */
+    muted: boolean;
+    /** Toggle whether we're actively listening. */
+    setMuted(muted: boolean): void;
+    /** Text of the sentence/clause TTS is currently playing back. Empty when
+     *  nothing is playing. Consumers can highlight this substring in the
+     *  assistant reply to give a karaoke-style follow-along effect. */
+    speakingChunk: string;
 }
 
 // We run the native recognizer in `continuous` mode and own end-of-turn
@@ -229,6 +239,12 @@ export function useVoiceConversation({
     const [liveTranscript, setLiveTranscript] = useState('');
     const [errorKind, setErrorKind] = useState<ErrorKind>(null);
     const [language, setLanguageState] = useState<string>(DEFAULT_LANGUAGE);
+    const [muted, setMutedState] = useState(false);
+    const mutedRef = useRef(false);
+    // Text of the chunk (sentence/clause) currently playing back — used by
+    // the renderer to highlight that fragment of the reply karaoke-style.
+    // Empty string when nothing is actively playing.
+    const [speakingChunk, setSpeakingChunk] = useState('');
 
     const { sendMessage, assistantWorking, messages, stopGeneration } =
         useChat();
@@ -264,10 +280,22 @@ export function useVoiceConversation({
 
     // Streaming-TTS bookkeeping.
     const spokenOffsetRef = useRef(0);
+    // Prefix of the assistant reply that has already been enqueued to TTS.
+    // Used to survive an id swap (optimistic → real server id) without
+    // re-speaking content we already voiced.
+    const spokenPrefixRef = useRef('');
     const currentAssistantIdRef = useRef<string | null>(null);
-    // Reply that was interrupted (tap or barge-in): never speak it again, even
-    // if it keeps streaming. A genuinely new reply has a different id.
-    const interruptedAssistantIdRef = useRef<string | null>(null);
+    // Assistant messages the streaming-TTS effect must NEVER speak. This
+    // covers two cases: (a) a reply the user barged in on / stopped, and (b)
+    // the previous newest-assistant at the moment a new turn started (so we
+    // don't accidentally voice it while waiting for the new reply to arrive).
+    const silencedAssistantIdsRef = useRef<Set<string>>(new Set());
+    // Kept in sync with the current `messages` array so finalizeTurn can peek
+    // at the current newest assistant id without depending on effect ordering.
+    const messagesRef = useRef<any[]>([]);
+    useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
     const ttsActiveCountRef = useRef(0);
     const ttsLangRef = useRef<string | undefined>(undefined);
     const lastFullLenRef = useRef(0);
@@ -324,6 +352,12 @@ export function useVoiceConversation({
 
     const startListening = useCallback(async () => {
         if (!isMountedRef.current) return;
+        if (mutedRef.current) {
+            // Mic is paused — do not spin the recognizer up. Stay in 'idle'
+            // so the UI can reflect the muted state.
+            applyState('idle');
+            return;
+        }
         clearRetryTimer();
         finalTextRef.current = '';
         interimRef.current = '';
@@ -373,6 +407,23 @@ export function useVoiceConversation({
             // wedged-recognizer safety net and any recovery streak.
             emptyRestartCountRef.current = 0;
             recoveryAttemptsRef.current = 0;
+            // Silence whatever the current newest assistant is right now.
+            // Otherwise the streaming-TTS effect (which fires as soon as we
+            // switch to 'processing' below) would start speaking that
+            // previous reply while waiting for the new one to arrive.
+            const priorNewest = [...messagesRef.current]
+                .reverse()
+                .find(m => m.role === 'assistant');
+            if (priorNewest?.id) {
+                silencedAssistantIdsRef.current.add(priorNewest.id);
+            }
+            // Fresh turn — per-turn state must not leak forward. Otherwise a
+            // "startsWith" continuation check from the previous reply can
+            // erroneously match and cause us to skip the head of the new one.
+            spokenPrefixRef.current = '';
+            spokenOffsetRef.current = 0;
+            currentAssistantIdRef.current = null;
+            ttsLangRef.current = undefined;
             applyState('processing');
             sendMessage(text);
         },
@@ -388,6 +439,11 @@ export function useVoiceConversation({
     // is wedged: many empty sessions in rapid succession with zero speech.
     const relisten = useCallback(() => {
         clearRetryTimer();
+        if (mutedRef.current) {
+            // Muted: don't loop the recognizer back up.
+            applyState('idle');
+            return;
+        }
         const now = Date.now();
         if (now - emptyRestartWindowAtRef.current > EMPTY_RESTART_WINDOW_MS) {
             // A calm gap since the last empty streak — the recognizer is healthy
@@ -592,6 +648,8 @@ export function useVoiceConversation({
     const onUtteranceDone = useCallback(() => {
         ttsActiveCountRef.current = Math.max(0, ttsActiveCountRef.current - 1);
         lastTtsActivityAtRef.current = Date.now();
+        // No more chunks queued for playback — clear the karaoke highlight.
+        if (ttsActiveCountRef.current === 0) setSpeakingChunk('');
         if (
             ttsActiveCountRef.current === 0 &&
             !assistantWorkingRef.current &&
@@ -627,6 +685,9 @@ export function useVoiceConversation({
                 serverChainRef.current = serverChainRef.current
                     .then(() => {
                         if (gen !== serverGenRef.current) return; // stopped
+                        // Mark this chunk as the one now playing so the
+                        // renderer can highlight it in the assistant reply.
+                        setSpeakingChunk(clean);
                         return playServerSynth(synthP);
                     })
                     .catch(e =>
@@ -652,6 +713,7 @@ export function useVoiceConversation({
                 // playAndRecord/measurement, which routes TTS to the quiet
                 // earpiece; a separate session plays at full loudspeaker volume.
                 useApplicationAudioSession: false,
+                onStart: () => setSpeakingChunk(clean),
                 onDone: onUtteranceDone,
                 onError: onUtteranceDone,
             });
@@ -669,19 +731,30 @@ export function useVoiceConversation({
             .find(m => m.role === 'assistant');
         if (!lastAssistant) return;
 
-        if (lastAssistant.id !== currentAssistantIdRef.current) {
-            currentAssistantIdRef.current = lastAssistant.id;
-            spokenOffsetRef.current = 0;
-            ttsLangRef.current = undefined;
-            // A genuinely new reply — clear any prior interruption marker.
-            interruptedAssistantIdRef.current = null;
-        }
-
-        // This reply was interrupted (tap or barge-in): never speak it again,
-        // even if it keeps streaming.
-        if (lastAssistant.id === interruptedAssistantIdRef.current) return;
+        // Silenced messages (previous reply left over at turn start, or a
+        // barge-in) must never be voiced — check BEFORE any id-change
+        // bookkeeping.
+        if (silencedAssistantIdsRef.current.has(lastAssistant.id)) return;
 
         const full = extractSpeakableText(lastAssistant);
+
+        if (lastAssistant.id !== currentAssistantIdRef.current) {
+            const prev = spokenPrefixRef.current;
+            // A different id from what we've been speaking. If the new reply
+            // is a continuation of the exact same content (optimistic → real
+            // server-id swap mid-stream), preserve our progress. Otherwise
+            // treat as a new reply.
+            const isContinuation = prev.length > 0 && full.startsWith(prev);
+            currentAssistantIdRef.current = lastAssistant.id;
+            if (isContinuation) {
+                spokenOffsetRef.current = prev.length;
+            } else {
+                spokenOffsetRef.current = 0;
+                spokenPrefixRef.current = '';
+                ttsLangRef.current = undefined;
+            }
+        }
+
         lastFullLenRef.current = full.length;
 
         // Both backends stream per sentence with an early first clause, so audio
@@ -709,6 +782,9 @@ export function useVoiceConversation({
             }
             sentences.forEach(enqueueSpeak);
             spokenOffsetRef.current += consumed;
+            // Track the exact prefix already committed to TTS so a later
+            // id swap can detect a continuation and skip re-speaking.
+            spokenPrefixRef.current = full.slice(0, spokenOffsetRef.current);
         }
 
         // Tool-call-only / empty responses: nothing to speak — resume listening.
@@ -1014,10 +1090,15 @@ export function useVoiceConversation({
             }
             stopTtsRef.current();
             ttsActiveCountRef.current = 0;
-            // Abandon the cut-off reply so it isn't re-spoken before the next
-            // one (cf. Fix 2). Start a fresh clean listen — a tap doesn't mean
-            // the user is already mid-sentence.
-            interruptedAssistantIdRef.current = currentAssistantIdRef.current;
+            setSpeakingChunk('');
+            // Silence the cut-off reply so its remainder isn't spoken once we
+            // resume listening for the next turn.
+            if (currentAssistantIdRef.current) {
+                silencedAssistantIdsRef.current.add(
+                    currentAssistantIdRef.current,
+                );
+            }
+            spokenPrefixRef.current = '';
             startListeningRef.current();
         }
     }, []);
@@ -1032,11 +1113,14 @@ export function useVoiceConversation({
         }
         stopTtsRef.current();
         ttsActiveCountRef.current = 0;
-        // Abandon the stopped reply so its unspoken remainder isn't spoken when
-        // the next turn starts (the old message lingers as the latest assistant
-        // until the new reply arrives). The id-change reset clears this marker
-        // once a genuinely new reply streams in.
-        interruptedAssistantIdRef.current = currentAssistantIdRef.current;
+        setSpeakingChunk('');
+        // Silence the stopped reply so its unspoken remainder isn't voiced
+        // when the next turn starts (the old message lingers as the latest
+        // assistant until the new reply arrives).
+        if (currentAssistantIdRef.current) {
+            silencedAssistantIdsRef.current.add(currentAssistantIdRef.current);
+        }
+        spokenPrefixRef.current = '';
         clearRetryTimer();
         try {
             ExpoSpeechRecognitionModule.abort();
@@ -1051,6 +1135,32 @@ export function useVoiceConversation({
         Linking.openSettings();
     }, []);
 
+    const setMuted = useCallback(
+        (next: boolean) => {
+            if (next === mutedRef.current) return;
+            mutedRef.current = next;
+            setMutedState(next);
+            if (next) {
+                // Tear down the recognizer and any in-flight TTS/retry so the
+                // agent isn't listening. Session stays alive (unlike stop()).
+                clearRetryTimer();
+                try {
+                    ExpoSpeechRecognitionModule.abort();
+                } catch {
+                    /* ignore */
+                }
+                recognizingRef.current = false;
+                stopTtsRef.current();
+                ttsActiveCountRef.current = 0;
+                setSpeakingChunk('');
+                applyState('idle');
+            } else {
+                startListeningRef.current();
+            }
+        },
+        [clearRetryTimer, applyState],
+    );
+
     return {
         state: voiceState,
         liveTranscript,
@@ -1063,5 +1173,8 @@ export function useVoiceConversation({
         interrupt,
         stop,
         openSettings,
+        muted,
+        setMuted,
+        speakingChunk,
     };
 }

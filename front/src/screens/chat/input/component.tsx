@@ -133,6 +133,8 @@ export default function ChatInput({
         showToolCalls,
         pendingInputText,
         setPendingInputText,
+        teamModeEnabled,
+        setTeamModeEnabled,
     } = useChat();
     const { user, updateUser } = useAuth();
     const { activeChatID } = useMain();
@@ -843,6 +845,34 @@ export default function ChatInput({
                         {selectedModelName}
                     </Text>
                 </Pressable>
+                {/* Team pill — visible only when the opt-in Team mode is on
+                    AND at least one team is available. Opens the existing
+                    team picker (unchanged). */}
+                {teamModeEnabled && AVAILABLE_TEAMS.length > 0 && (
+                    <Pressable
+                        onPress={() => setTeamMenuVisible(true)}
+                        style={({ pressed }) => [
+                            styles.modelPill,
+                            pressed && styles.modelPillPressed,
+                        ]}
+                        accessibilityLabel="Select team"
+                    >
+                        <Group
+                            width={16}
+                            height={16}
+                            color={theme.accent}
+                            style={{ marginRight: 6 }}
+                        />
+                        <Text
+                            theme={descriptor}
+                            style={styles.modelPillText}
+                            numberOfLines={1}
+                        >
+                            {AVAILABLE_TEAMS.find(t => t.id === selectedTeamId)
+                                ?.name ?? 'Team'}
+                        </Text>
+                    </Pressable>
+                )}
                 {thinkingLevel && thinkingLevel !== 'off' && (
                     <Pressable
                         onPress={() => {
@@ -970,7 +1000,10 @@ export default function ChatInput({
                         onPress={handleSend}
                         style={({ pressed }) => [
                             styles.circleBtn,
-                            { backgroundColor: 'transparent', overflow: 'hidden' },
+                            {
+                                backgroundColor: 'transparent',
+                                overflow: 'hidden',
+                            },
                             isSendDisabled && styles.circleBtnDisabled,
                             pressed &&
                                 !isSendDisabled &&

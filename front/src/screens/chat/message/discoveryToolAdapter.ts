@@ -301,9 +301,7 @@ function resolvedLabel(
     const meta = getIntegrationMetadata(env.tool);
     // Method-level card mapping wins when we know the tool — same map as the
     // direct decorateKnownToolCall path.
-    const byMethod = env.method
-        ? KNOWN_TOOL_DISPLAY[env.method]
-        : undefined;
+    const byMethod = env.method ? KNOWN_TOOL_DISPLAY[env.method] : undefined;
     // In-process "local" toolkits (maps, watch, notification, planning, …) routed
     // through discovery_tool aren't in the integration registry. Fall back to the
     // per-method display map so they render with a friendly label + icon instead
