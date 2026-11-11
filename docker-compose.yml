@@ -23,7 +23,7 @@ services:
       db:
         condition: service_healthy
       back:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./config:/config:ro
 
@@ -50,6 +50,12 @@ services:
         condition: service_healthy
       sandbox-sidecar:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
 
   # Railway Sandboxes backend — the agent sandbox runs in per-user isolated VMs.
   # Requires real Railway credentials in the environment below.
