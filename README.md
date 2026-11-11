@@ -55,7 +55,7 @@ graph LR
 ### Prerequisites
 
 - **Docker** & **Docker Compose**
-- **Go** 1.22+
+- **Go** 1.25+
 - **Python** 3.11+
 - **Node.js** 20+
 
@@ -63,8 +63,8 @@ graph LR
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/kliuchnikovv/nomi-api.git
-   cd nomi-api
+   git clone https://github.com/kliuchnikovv/nomi.git
+   cd nomi
    ```
 
 2. **Initialize the Environment**
