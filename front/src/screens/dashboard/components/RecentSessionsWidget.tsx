@@ -4,7 +4,7 @@ const isEmoji = (s?: string) =>
     !!s && /\p{Emoji}/u.test(s) && !/^[0-9#*]$/.test(s);
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { Card, ListItem, Text } from '@genie/ds';
+import { Card, ListItem, Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { useMain } from '../../main/context';
 import { Chat } from '../../main/models';

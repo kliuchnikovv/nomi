@@ -3,14 +3,14 @@ package container
 import (
 	"encoding/hex"
 
-	"github.com/kliuchnikovv/genie-api/internal/auth"
-	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/credentials"
-	"github.com/kliuchnikovv/genie-api/internal/githubapp"
-	"github.com/kliuchnikovv/genie-api/internal/hub"
-	"github.com/kliuchnikovv/genie-api/internal/services"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
-	"github.com/kliuchnikovv/genie-api/internal/storage/repositories"
+	"github.com/kliuchnikovv/nomi-api/internal/auth"
+	"github.com/kliuchnikovv/nomi-api/internal/config"
+	"github.com/kliuchnikovv/nomi-api/internal/credentials"
+	"github.com/kliuchnikovv/nomi-api/internal/githubapp"
+	"github.com/kliuchnikovv/nomi-api/internal/hub"
+	"github.com/kliuchnikovv/nomi-api/internal/services"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/storage/repositories"
 	"go.uber.org/zap"
 )
 

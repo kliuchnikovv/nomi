@@ -10,7 +10,7 @@ import Animated, {
     cancelAnimation,
     Easing,
 } from 'react-native-reanimated';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
 import type { VoiceState } from './useVoiceConversation';
@@ -19,12 +19,17 @@ type Props = {
     state: VoiceState;
     onExit: () => void;
     onMicPress: () => void;
+    muted?: boolean;
+    /** Called when the user taps the "speaking · tap to interrupt" label
+     *  during TTS playback. Renderer no-ops the tap in other states. */
+    onInterrupt?: () => void;
 };
 
 const BAR_COUNT = 5;
 const BAR_DELAYS_MS = [0, 90, 180, 270, 120];
 
-function statusLabel(state: VoiceState): string {
+function statusLabel(state: VoiceState, muted: boolean): string {
+    if (muted) return 'mic paused · tap to resume';
     switch (state) {
         case 'loading':
             return 'preparing…';
@@ -92,10 +97,17 @@ function WaveformBar({
     );
 }
 
-export function VoiceDock({ state, onExit, onMicPress }: Props) {
+export function VoiceDock({
+    state,
+    onExit,
+    onMicPress,
+    muted = false,
+    onInterrupt,
+}: Props) {
     const { theme, descriptor } = useTheme();
-    const active = state === 'listening' || state === 'speaking';
-    const label = statusLabel(state);
+    const active = !muted && (state === 'listening' || state === 'speaking');
+    const label = statusLabel(state, muted);
+    const labelTappable = state === 'speaking' && !!onInterrupt;
 
     // Alternate accent / accentAlt across bars for the same waveform gradient
     // vibe used elsewhere in the voice affordance.
@@ -145,13 +157,30 @@ export function VoiceDock({ state, onExit, onMicPress }: Props) {
                     ))}
                 </View>
 
-                <Text
-                    theme={descriptor}
-                    style={[styles.label, { color: theme.textSecondary }]}
-                    numberOfLines={1}
+                <Pressable
+                    onPress={labelTappable ? onInterrupt : undefined}
+                    disabled={!labelTappable}
+                    style={styles.labelWrap}
+                    accessibilityRole={labelTappable ? 'button' : undefined}
+                    accessibilityLabel={
+                        labelTappable ? 'Tap to interrupt' : undefined
+                    }
                 >
-                    {label}
-                </Text>
+                    <Text
+                        theme={descriptor}
+                        style={[
+                            styles.label,
+                            {
+                                color: labelTappable
+                                    ? theme.accentAlt
+                                    : theme.textSecondary,
+                            },
+                        ]}
+                        numberOfLines={1}
+                    >
+                        {label}
+                    </Text>
+                </Pressable>
 
                 <Pressable
                     onPress={onMicPress}
@@ -159,16 +188,22 @@ export function VoiceDock({ state, onExit, onMicPress }: Props) {
                     style={({ pressed }) => [
                         styles.sideBtn,
                         {
-                            backgroundColor: theme.accent,
+                            backgroundColor: muted
+                                ? theme.surfaceHighlight
+                                : theme.accent,
                             opacity: pressed ? 0.8 : 1,
                         },
                     ]}
                     accessibilityLabel={
-                        state === 'speaking' ? 'Interrupt' : 'Voice active'
+                        muted ? 'Resume listening' : 'Mute microphone'
                     }
                     accessibilityRole="button"
                 >
-                    <Ionicons name="mic" size={18} color="#fff" />
+                    <Ionicons
+                        name={muted ? 'mic-off' : 'mic'}
+                        size={18}
+                        color={muted ? theme.text : '#fff'}
+                    />
                 </Pressable>
             </View>
         </View>
@@ -214,8 +249,11 @@ const styles = StyleSheet.create({
         height: 22,
         borderRadius: 2,
     },
-    label: {
+    labelWrap: {
         flex: 1,
+        justifyContent: 'center',
+    },
+    label: {
         fontSize: 14,
         fontWeight: '500',
     },

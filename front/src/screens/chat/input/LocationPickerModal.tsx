@@ -16,7 +16,7 @@ import {
     TextInput,
     View,
 } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { MapPin, XmarkCircle } from 'iconoir-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import {

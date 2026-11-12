@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/nomi-api/internal/config"
 	"go.uber.org/zap"
 )
 

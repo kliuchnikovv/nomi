@@ -12,7 +12,7 @@ services:
       - PGPORT=5432
       - PGUSER=postgres
       - PGPASSWORD=postgres
-      - PGDATABASE=genie
+      - PGDATABASE=nomi
       - PORT=8080
       - CALLBACK_BASE=http://localhost:8080
       - GOOGLE_REDIRECT_URL=http://localhost:8080/auth/google/callback
@@ -23,7 +23,7 @@ services:
       db:
         condition: service_healthy
       back:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./config:/config:ro
 
@@ -40,7 +40,7 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/genie?sslmode=disable
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/nomi?sslmode=disable
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - REDIS_URL=redis://redis:6379
       - SANDBOX_CONTROLLER_URL=http://sandbox-sidecar:8090
@@ -50,6 +50,12 @@ services:
         condition: service_healthy
       sandbox-sidecar:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
 
   # Railway Sandboxes backend — the agent sandbox runs in per-user isolated VMs.
   # Requires real Railway credentials in the environment below.
@@ -71,7 +77,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=genie
+      - POSTGRES_DB=nomi
     ports:
       - "5432:5432"
     volumes:

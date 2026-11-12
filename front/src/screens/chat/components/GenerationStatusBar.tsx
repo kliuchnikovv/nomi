@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 
 type Props = {

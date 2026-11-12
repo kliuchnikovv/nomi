@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { themes } from '../../../themes';
 import { createComponentStyles } from './settingsComponentStyles';

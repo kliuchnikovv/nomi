@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/integrations"
+	"github.com/kliuchnikovv/nomi-api/internal/config"
+	"github.com/kliuchnikovv/nomi-api/internal/integrations"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )

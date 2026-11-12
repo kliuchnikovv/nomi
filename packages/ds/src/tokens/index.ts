@@ -3,7 +3,7 @@ export {
     defaultRadius,
     defaultSpacing,
     defaultTypography,
-} from '@genie/front/themes/tokens';
+} from '@nomi/front/themes/tokens';
 export type {
     ThemeColors,
     ThemeDescriptor,
@@ -12,4 +12,4 @@ export type {
     ThemeSpacing,
     ThemeTypography,
     TypographyVariant,
-} from '@genie/front/themes/types';
+} from '@nomi/front/themes/types';

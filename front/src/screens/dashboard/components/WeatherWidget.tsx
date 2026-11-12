@@ -8,7 +8,7 @@ import {
     Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Spinner, Text } from '@genie/ds';
+import { Card, Spinner, Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { weatherApi } from '../../../apiClient';
 import { getStoredLocation } from '../../../services/location/locationService';

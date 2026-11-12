@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Mail } from 'iconoir-react-native';
-import { useTheme } from '@genie/front/context/ThemeContext';
-import { ThemePalette } from '@genie/front/themes/types';
-import { integrationStorage } from '@genie/front/services/integrations/IntegrationStorage';
+import { useTheme } from '@nomi/front/context/ThemeContext';
+import { ThemePalette } from '@nomi/front/themes/types';
+import { integrationStorage } from '@nomi/front/services/integrations/IntegrationStorage';
 
 interface GmailSidebarItemProps {
     integrationId: string;

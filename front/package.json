@@ -100,22 +100,22 @@
     "typescript": "^5.8.3"
   },
   "dependenciesMeta": {
-    "@genie/plugin-gmail": {
+    "@nomi/plugin-gmail": {
       "injected": true
     },
-    "@genie/plugin-calendar": {
+    "@nomi/plugin-calendar": {
       "injected": true
     },
-    "@genie/plugin-ios_calendar": {
+    "@nomi/plugin-ios_calendar": {
       "injected": true
     },
-    "@genie/plugin-ios_reminders": {
+    "@nomi/plugin-ios_reminders": {
       "injected": true
     },
-    "@genie/plugin-ios_contacts": {
+    "@nomi/plugin-ios_contacts": {
       "injected": true
     },
-    "@genie/plugin-ios_health": {
+    "@nomi/plugin-ios_health": {
       "injected": true
     }
   },

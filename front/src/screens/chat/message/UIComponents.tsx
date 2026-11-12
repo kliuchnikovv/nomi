@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { useChat } from '../context';
 import { Check } from 'iconoir-react-native';

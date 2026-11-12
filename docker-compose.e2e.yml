@@ -25,7 +25,7 @@ services:
   back:
     environment:
       - BRAIN_TEST_MODE=1
-      - DB_DSN=postgres://postgres:postgres@db:5432/genie?sslmode=disable
+      - DB_DSN=postgres://postgres:postgres@db:5432/nomi?sslmode=disable
       - GOOGLE_API_KEY=e2e-stub-key
       - GEMINI_API_KEY=e2e-stub-key
 

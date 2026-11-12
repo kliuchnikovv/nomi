@@ -181,7 +181,7 @@ async def test_chosen_inline_result_dispatches_to_brain():
     svc._dispatch_to_brain.assert_awaited_once()
     _, kwargs = svc._dispatch_to_brain.call_args
     assert kwargs["chat_id"] == 555
-    assert kwargs["genie_user_id"] == "u-9"
+    assert kwargs["nomi_user_id"] == "u-9"
     assert kwargs["text"] == "что нового"
     assert kwargs["inline_message_id"] == "im-7"
 
@@ -257,7 +257,7 @@ async def test_dispatch_to_brain_publishes_frame():
 
     await svc._dispatch_to_brain(
         chat_id=12345,
-        genie_user_id="u-1",
+        nomi_user_id="u-1",
         data={"selected_model": ""},
         text="привет",
         inline_message_id="im-3",
@@ -291,7 +291,7 @@ async def test_dispatch_agent_type_group_for_negative_chat_id():
 
     # Negative chat id == Telegram group/supergroup.
     await svc._dispatch_to_brain(
-        chat_id=-100200, genie_user_id="u-1", data={}, text="вопрос"
+        chat_id=-100200, nomi_user_id="u-1", data={}, text="вопрос"
     )
     payload = json.loads(fake_redis.publish.call_args[0][1])["payload"]
     assert payload["agent_type"] == "group"
@@ -311,7 +311,7 @@ async def test_dispatch_agent_type_nomi_for_private_chat():
 
     # Positive chat id, no inline → private 1:1 chat keeps the full personal agent.
     await svc._dispatch_to_brain(
-        chat_id=12345, genie_user_id="u-1", data={}, text="привет"
+        chat_id=12345, nomi_user_id="u-1", data={}, text="привет"
     )
     payload = json.loads(fake_redis.publish.call_args[0][1])["payload"]
     assert payload["agent_type"] == "nomi"
@@ -474,7 +474,7 @@ async def test_dispatch_to_brain_inline_action_in_frame():
 
     await svc._dispatch_to_brain(
         chat_id=777,
-        genie_user_id="u-1",
+        nomi_user_id="u-1",
         data={},
         text="привет",
         brain_prompt="Переведи текст: привет",

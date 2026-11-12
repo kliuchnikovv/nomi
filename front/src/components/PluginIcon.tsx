@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { useTheme } from '@genie/front/context/ThemeContext';
-import { ThemePalette } from '@genie/front/themes/types';
-import { INTEGRATION_REGISTRY } from '@genie/front/services/integrations/registry';
+import { useTheme } from '@nomi/front/context/ThemeContext';
+import { ThemePalette } from '@nomi/front/themes/types';
+import { INTEGRATION_REGISTRY } from '@nomi/front/services/integrations/registry';
 
 interface PluginIconProps {
     provider: string;

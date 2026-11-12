@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kliuchnikovv/genie-api/internal/credentials"
+	"github.com/kliuchnikovv/nomi-api/internal/credentials"
 	"go.uber.org/zap"
 )
 

@@ -1,7 +1,7 @@
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import { briefingApi } from '../../apiClient';
-import { gmailClient } from '@genie/plugin-gmail/client/GmailClient';
+import { gmailClient } from '@nomi/plugin-gmail/client/GmailClient';
 import { integrationStorage } from '../integrations/IntegrationStorage';
 
 const BACKGROUND_EMAIL_SYNC_TASK = 'background-email-sync';

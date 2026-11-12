@@ -21,7 +21,7 @@ if linkage != nil
   use_frameworks! :linkage => :static#linkage.to_sym
 end
 
-target 'genie' do
+target 'nomi' do
   # AppCheckCore (Swift) requires module maps for its GoogleUtilities and
   # RecaptchaInterop deps. Do NOT use global `use_modular_headers!` — under RN
   # 0.81 it makes React-RuntimeCore and React-jsitooling emit modulemaps with

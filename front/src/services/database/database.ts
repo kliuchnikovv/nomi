@@ -5,7 +5,7 @@
 
 import * as SQLite from 'expo-sqlite';
 
-const DATABASE_NAME = 'genie.db';
+const DATABASE_NAME = 'nomi.db';
 const DATABASE_VERSION = 9;
 
 let db: SQLite.SQLiteDatabase | null = null;

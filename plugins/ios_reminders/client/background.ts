@@ -4,8 +4,8 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { IOSRemindersClient } from '@genie/front/services/integrations/clients/IOSRemindersClient';
-import { eventsApi } from '@genie/front/apiClient';
+import { IOSRemindersClient } from '@nomi/front/services/integrations/clients/IOSRemindersClient';
+import { eventsApi } from '@nomi/front/apiClient';
 
 /** Look-ahead window for due-reminder detection (ms). */
 const UPCOMING_LOOKAHEAD_MS = 90 * 60 * 1000; // 90 minutes

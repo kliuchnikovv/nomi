@@ -2,8 +2,8 @@
  * iOS Health client plugin: executes Apple Health (HealthKit) tool actions.
  */
 
-import type { ClientPluginHandler } from '@genie/front/plugins/clientRegistry';
-import { IOSHealthClient } from '@genie/front/services/integrations/clients/IOSHealthClient';
+import type { ClientPluginHandler } from '@nomi/front/plugins/clientRegistry';
+import { IOSHealthClient } from '@nomi/front/services/integrations/clients/IOSHealthClient';
 
 export const iosHealthPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {

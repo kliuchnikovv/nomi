@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Nomi",
-    "slug": "genie",
+    "slug": "nomi",
     "plugins": [
       [
         "expo-notifications",

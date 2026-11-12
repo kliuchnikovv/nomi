@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/chat"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/chat"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 )
 
 // MessageRepository defines interface for message operations

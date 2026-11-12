@@ -12,7 +12,7 @@ import type {
     ViewStyle,
 } from 'react-native';
 
-import type { ThemeDescriptor } from '@genie/front/themes/types';
+import type { ThemeDescriptor } from '@nomi/front/themes/types';
 
 import { Text } from '../Text';
 

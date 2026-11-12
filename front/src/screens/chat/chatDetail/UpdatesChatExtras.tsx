@@ -7,7 +7,7 @@
 
 import React, { useState } from 'react';
 import { View, TouchableOpacity, StyleSheet, Linking } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../../context/ThemeContext';

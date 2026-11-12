@@ -9,7 +9,7 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp } from '@react-navigation/native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { useMain } from '../../main/context';
 import { useUpdates } from '../hooks/useUpdatesUnread';

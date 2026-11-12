@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/nomi-api/internal/config"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"strings"

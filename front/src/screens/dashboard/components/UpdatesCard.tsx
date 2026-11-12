@@ -3,7 +3,7 @@ import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp } from '@react-navigation/native';
-import { Card, Text } from '@genie/ds';
+import { Card, Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { useMain } from '../../main/context';
 import type { RootTabParamList } from '../../../navigation/types';

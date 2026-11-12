@@ -22,7 +22,7 @@ def _make_provider(response: str, vision: bool = False) -> MagicMock:
 
 def test_generate_flow_returns_yaml():
     from agent import generate_flow
-    provider = _make_provider("appId: com.kliuchnikovv.genie\n---\n- launchApp")
+    provider = _make_provider("appId: com.kliuchnikovv.nomi\n---\n- launchApp")
     result = generate_flow(provider, SAMPLE_PATH)
     assert "launchApp" in result
     provider.complete.assert_called_once()
@@ -77,7 +77,7 @@ def test_analyze_results_no_images_when_no_vision(tmp_path):
 
 def test_run_maestro_returns_exit_code_and_log(tmp_path):
     from agent import run_maestro
-    flow_yaml = "appId: com.kliuchnikovv.genie\n---\n- launchApp"
+    flow_yaml = "appId: com.kliuchnikovv.nomi\n---\n- launchApp"
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="PASS", stderr="")
         exit_code, log, screenshots = run_maestro(flow_yaml, tmp_path)

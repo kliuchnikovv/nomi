@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, Pressable } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { createStyles, createMarkdownStyles } from './dynamicStyles';
 import Markdown from 'react-native-markdown-display';

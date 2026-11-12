@@ -6,8 +6,8 @@ export async function backgroundTask(): Promise<void> {
     console.log('[IMAP Email Background Task] Started');
 
     try {
-        const { integrationStorage } = await import('@genie/front/services/integrations/IntegrationStorage');
-        const { imapEmailClient } = await import('@genie/front/services/integrations/clients/IMAPEmailClient');
+        const { integrationStorage } = await import('@nomi/front/services/integrations/IntegrationStorage');
+        const { imapEmailClient } = await import('@nomi/front/services/integrations/clients/IMAPEmailClient');
 
         const integrations = await integrationStorage.getIntegrations();
         const imapIntegrations = integrations.filter(i => i.provider === 'imap' && i.enabled);

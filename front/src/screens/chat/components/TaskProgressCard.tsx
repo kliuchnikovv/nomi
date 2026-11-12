@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { tasksApi } from '../../../apiClient';
 import type { AgentTaskStatus, AgentTaskStep } from '../../main/models';

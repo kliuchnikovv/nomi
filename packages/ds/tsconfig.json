@@ -3,7 +3,7 @@
     "compilerOptions": {
         "baseUrl": ".",
         "paths": {
-            "@genie/front/*": ["../../front/src/*"]
+            "@nomi/front/*": ["../../front/src/*"]
         }
     },
     "include": ["src/**/*.ts", "src/**/*.tsx"],

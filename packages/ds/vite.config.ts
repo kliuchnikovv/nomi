@@ -11,7 +11,7 @@ export default defineConfig({
     resolve: {
         alias: {
             'react-native': 'react-native-web',
-            '@genie/front': path.resolve(__dirname, '../../front/src'),
+            '@nomi/front': path.resolve(__dirname, '../../front/src'),
         },
         extensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js'],
     },

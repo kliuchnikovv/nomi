@@ -1,7 +1,7 @@
 {
-  "name": "@genie/plugin-telegram",
+  "name": "@nomi/plugin-telegram",
   "version": "1.0.0",
-  "description": "Telegram bot integration plugin for Genie",
+  "description": "Telegram bot integration plugin for Nomi",
   "main": "./client/executor.ts",
   "types": "./client/executor.ts",
   "private": true,

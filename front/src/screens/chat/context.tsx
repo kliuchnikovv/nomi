@@ -246,7 +246,7 @@ export function ChatProvider({
                 // Remember the user's explicit choice globally so new chats
                 // default to it. Only manual picks are persisted — models
                 // auto-loaded from history must not overwrite the default.
-                AsyncStorage.setItem('@genie_selected_model', model).catch(
+                AsyncStorage.setItem('@nomi_selected_model', model).catch(
                     () => {},
                 );
             }
@@ -306,10 +306,16 @@ export function ChatProvider({
     const [showMemberResponses, setShowMemberResponses] =
         useState<boolean>(true);
     const [detailLevel, setDetailLevelInternal] = useState<DetailLevel>('all');
+    // Team-mode is opt-in — an experimental multi-agent flow. Off by default;
+    // toggle lives in the composer's plus-menu and is persisted so it survives
+    // relaunches. When off, the team pill / picker is hidden and outgoing
+    // messages carry no team `command`.
+    const [teamModeEnabled, setTeamModeEnabledInternal] =
+        useState<boolean>(false);
 
     // Load persisted detail level on mount
     useEffect(() => {
-        AsyncStorage.getItem('@genie_detail_level').then(saved => {
+        AsyncStorage.getItem('@nomi_detail_level').then(saved => {
             if (
                 saved &&
                 ['hide', 'tool_calls', 'think', 'all'].includes(saved)
@@ -317,12 +323,23 @@ export function ChatProvider({
                 setDetailLevel(saved as DetailLevel);
             }
         });
+        AsyncStorage.getItem('@nomi_team_mode_enabled').then(saved => {
+            if (saved === '1') setTeamModeEnabledInternal(true);
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const setTeamModeEnabled = useCallback((next: boolean) => {
+        setTeamModeEnabledInternal(next);
+        AsyncStorage.setItem(
+            '@nomi_team_mode_enabled',
+            next ? '1' : '0',
+        ).catch(() => {});
     }, []);
 
     const setDetailLevel = useCallback((level: DetailLevel) => {
         setDetailLevelInternal(level);
-        AsyncStorage.setItem('@genie_detail_level', level);
+        AsyncStorage.setItem('@nomi_detail_level', level);
         switch (level) {
             case 'hide':
                 setShowToolCalls(false);
@@ -1481,7 +1498,7 @@ export function ChatProvider({
                         let preferred: string | null = null;
                         try {
                             const saved = await AsyncStorage.getItem(
-                                '@genie_selected_model',
+                                '@nomi_selected_model',
                             );
                             if (saved && models.some(m => m.id === saved)) {
                                 preferred = saved;
@@ -2312,6 +2329,8 @@ export function ChatProvider({
         setShowMemberResponses,
         detailLevel,
         setDetailLevel,
+        teamModeEnabled,
+        setTeamModeEnabled,
         activeAgentsCount,
         pendingInputText,
         setPendingInputText,

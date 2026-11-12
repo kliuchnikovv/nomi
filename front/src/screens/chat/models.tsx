@@ -94,6 +94,8 @@ export interface ChatContextType {
     setShowMemberResponses: (show: boolean) => void;
     detailLevel: DetailLevel;
     setDetailLevel: (level: DetailLevel) => void;
+    teamModeEnabled: boolean;
+    setTeamModeEnabled: (next: boolean) => void;
     activeAgentsCount?: number;
     pendingInputText: string | null;
     setPendingInputText: (text: string | null) => void;

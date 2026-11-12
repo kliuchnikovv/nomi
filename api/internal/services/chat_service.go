@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/chat"
-	"github.com/kliuchnikovv/genie-api/internal/storage/repositories"
+	"github.com/kliuchnikovv/nomi-api/internal/chat"
+	"github.com/kliuchnikovv/nomi-api/internal/storage/repositories"
 )
 
 const defaultPersistentChatModel = "gemini-2.5-flash"

@@ -1,5 +1,5 @@
 {
-  "name": "@genie/plugin-ios_calendar",
+  "name": "@nomi/plugin-ios_calendar",
   "version": "1.0.0",
   "description": "iOS native Calendar integration via EventKit",
   "main": "./client/executor.ts",

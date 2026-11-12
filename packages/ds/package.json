@@ -1,5 +1,5 @@
 {
-    "name": "@genie/ds",
+    "name": "@nomi/ds",
     "version": "0.0.1",
     "private": true,
     "description": "Nomi design system — primitives and tokens shared by the app.",

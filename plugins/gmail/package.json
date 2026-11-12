@@ -1,7 +1,7 @@
 {
-  "name": "@genie/plugin-gmail",
+  "name": "@nomi/plugin-gmail",
   "version": "1.0.0",
-  "description": "Gmail integration plugin for Genie",
+  "description": "Gmail integration plugin for Nomi",
   "main": "./client/executor.ts",
   "types": "./client/executor.ts",
   "private": true,

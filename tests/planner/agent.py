@@ -12,11 +12,11 @@ from providers import LLMProvider
 MAESTRO_SYSTEM = """\
 You are an expert in the Maestro mobile UI testing framework.
 Generate a valid Maestro YAML flow for a React Native iOS app.
-App bundle ID: com.kliuchnikovv.genie
+App bundle ID: com.kliuchnikovv.nomi
 Known UI elements: "Planner" (screen title), "Chat" (button), "Plan" (button).
 Maestro YAML format:
 ---
-appId: com.kliuchnikovv.genie
+appId: com.kliuchnikovv.nomi
 ---
 - launchApp
 - tapOn: "Plan"

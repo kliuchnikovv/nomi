@@ -34,7 +34,7 @@ describe('ChatCache — chats', () => {
     });
 
     it('returns null when stored value is invalid JSON', async () => {
-        await AsyncStorage.setItem('genie_chats_cache', 'NOT_JSON');
+        await AsyncStorage.setItem('nomi_chats_cache', 'NOT_JSON');
         const result = await ChatCache.getCachedChats();
         expect(result).toBeNull();
     });
@@ -73,7 +73,7 @@ describe('ChatCache — messages', () => {
     });
 
     it('returns null on corrupt data', async () => {
-        await AsyncStorage.setItem('genie_messages_chat-1', '{bad json');
+        await AsyncStorage.setItem('nomi_messages_chat-1', '{bad json');
         const result = await ChatCache.getCachedMessages('chat-1');
         expect(result).toBeNull();
     });
@@ -130,7 +130,7 @@ describe('ChatCache.updateCachedMessages', () => {
 // ── clearCache ────────────────────────────────────────────────────────────────
 
 describe('ChatCache.clearCache', () => {
-    it('removes all genie_ prefixed keys', async () => {
+    it('removes all nomi_ prefixed keys', async () => {
         await ChatCache.cacheChats([makeChat('c1')]);
         await ChatCache.cacheMessages('chat-1', [makeMsg('m1')]);
         await ChatCache.clearCache();

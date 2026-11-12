@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"github.com/kliuchnikovv/genie-api/internal/credentials"
-	"github.com/kliuchnikovv/genie-api/internal/hub"
-	"github.com/kliuchnikovv/genie-api/internal/push"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/credentials"
+	"github.com/kliuchnikovv/nomi-api/internal/hub"
+	"github.com/kliuchnikovv/nomi-api/internal/push"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 )
 
 type StreamHandler struct {

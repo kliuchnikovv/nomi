@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/chat"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/chat"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -34,6 +34,7 @@ func newTestDBWithMessages(t *testing.T) *storage.Storage {
 			team_id    TEXT,
 			project_id TEXT,
 			icon       TEXT NOT NULL DEFAULT '',
+			session_flags TEXT NOT NULL DEFAULT '{}',
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
 			archived_at DATETIME,

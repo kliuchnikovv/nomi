@@ -16,8 +16,8 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
                BuildableName = "Nomi.app"
-               BlueprintName = "genie"
-               ReferencedContainer = "container:genie.xcodeproj">
+               BlueprintName = "nomi"
+               ReferencedContainer = "container:nomi.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "genieTests.xctest"
-               BlueprintName = "genieTests"
-               ReferencedContainer = "container:genie.xcodeproj">
+               BuildableName = "nomiTests.xctest"
+               BlueprintName = "nomiTests"
+               ReferencedContainer = "container:nomi.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -57,8 +57,8 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
             BuildableName = "Nomi.app"
-            BlueprintName = "genie"
-            ReferencedContainer = "container:genie.xcodeproj">
+            BlueprintName = "nomi"
+            ReferencedContainer = "container:nomi.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -74,8 +74,8 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
             BuildableName = "Nomi.app"
-            BlueprintName = "genie"
-            ReferencedContainer = "container:genie.xcodeproj">
+            BlueprintName = "nomi"
+            ReferencedContainer = "container:nomi.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

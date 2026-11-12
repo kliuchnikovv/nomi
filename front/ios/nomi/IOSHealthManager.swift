@@ -1,6 +1,6 @@
 //
 //  IOSHealthManager.swift
-//  Genie
+//  Nomi
 //
 //  iOS Health Manager for HealthKit integration
 //

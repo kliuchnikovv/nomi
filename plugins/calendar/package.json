@@ -1,7 +1,7 @@
 {
-  "name": "@genie/plugin-calendar",
+  "name": "@nomi/plugin-calendar",
   "version": "1.0.0",
-  "description": "Google Calendar integration plugin for Genie",
+  "description": "Google Calendar integration plugin for Nomi",
   "main": "./server/tools.py",
   "types": "./server/tools.py",
   "private": true,

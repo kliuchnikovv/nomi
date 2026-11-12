@@ -3,7 +3,7 @@
  * All Gmail operations are now handled server-side via the Python tools.py.
  */
 
-import type { ClientPluginHandler } from "@genie/front/plugins/clientRegistry";
+import type { ClientPluginHandler } from "@nomi/front/plugins/clientRegistry";
 
 export const gmailPlugin: ClientPluginHandler = {
   async execute(method: string, params: Record<string, any>): Promise<string> {

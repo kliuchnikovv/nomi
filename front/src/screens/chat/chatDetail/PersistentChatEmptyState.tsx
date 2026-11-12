@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../auth/context';
 import { useConnectors } from '../../settings/connectors/context';

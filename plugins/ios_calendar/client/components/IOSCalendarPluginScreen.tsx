@@ -5,9 +5,9 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useTheme } from '@genie/front/context/ThemeContext';
-import { SharedPluginScreen } from '@genie/front/plugins/components/SharedPluginScreen';
-import { PluginMainScreenProps } from '@genie/front/plugins/types';
+import { useTheme } from '@nomi/front/context/ThemeContext';
+import { SharedPluginScreen } from '@nomi/front/plugins/components/SharedPluginScreen';
+import { PluginMainScreenProps } from '@nomi/front/plugins/types';
 
 export default function IOSCalendarPluginScreen({ onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();

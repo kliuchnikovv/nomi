@@ -53,7 +53,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
         [chats, activeChatID],
     );
 
-    // const API_URL = 'https://genie.com';
+    // const API_URL = 'https://nomi.com';
 
     // Load chats on mount
     useEffect(() => {

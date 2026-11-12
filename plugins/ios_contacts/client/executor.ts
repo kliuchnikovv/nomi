@@ -2,8 +2,8 @@
  * iOS Contacts client plugin: executes iOS Contacts tool actions via Contacts Framework.
  */
 
-import type { ClientPluginHandler } from '@genie/front/plugins/clientRegistry';
-import { IOSContactsClient } from '@genie/front/services/integrations/clients/IOSContactsClient';
+import type { ClientPluginHandler } from '@nomi/front/plugins/clientRegistry';
+import { IOSContactsClient } from '@nomi/front/services/integrations/clients/IOSContactsClient';
 
 export const iosContactsPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {

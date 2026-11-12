@@ -2,7 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { View } from 'react-native';
-import { darkMinimalTheme } from '@genie/front/themes/darkMinimal';
+import { darkMinimalTheme } from '@nomi/front/themes/darkMinimal';
 
 import { ListItem } from './ListItem';
 import { Divider } from '../Divider';

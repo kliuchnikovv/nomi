@@ -8,14 +8,14 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Github } from "iconoir-react-native";
-import { useTheme } from "@genie/front/context/ThemeContext";
-import { ThemePalette, ThemeColors } from "@genie/front/themes/types";
-import { PluginMainScreenProps } from "@genie/front/plugins/types";
-import { SharedPluginScreen } from "@genie/front/plugins/components/SharedPluginScreen";
-import { getApiUrl } from "@genie/front/config";
-import { authStore } from "@genie/front/apiClient";
-import { ContextItem } from "@genie/front/screens/chat/components/ContextItemCard";
-import { contextStore } from "@genie/front/services/ContextStore";
+import { useTheme } from "@nomi/front/context/ThemeContext";
+import { ThemePalette, ThemeColors } from "@nomi/front/themes/types";
+import { PluginMainScreenProps } from "@nomi/front/plugins/types";
+import { SharedPluginScreen } from "@nomi/front/plugins/components/SharedPluginScreen";
+import { getApiUrl } from "@nomi/front/config";
+import { authStore } from "@nomi/front/apiClient";
+import { ContextItem } from "@nomi/front/screens/chat/components/ContextItemCard";
+import { contextStore } from "@nomi/front/services/ContextStore";
 import { gitHubRepoCache } from "../cache";
 
 interface Repo {

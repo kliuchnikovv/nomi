@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/config"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

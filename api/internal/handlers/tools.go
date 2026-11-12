@@ -6,12 +6,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/crypto"
-	"github.com/kliuchnikovv/genie-api/internal/ghtoken"
-	"github.com/kliuchnikovv/genie-api/internal/githubapp"
-	"github.com/kliuchnikovv/genie-api/internal/integrations"
-	"github.com/kliuchnikovv/genie-api/internal/plugins"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/crypto"
+	"github.com/kliuchnikovv/nomi-api/internal/ghtoken"
+	"github.com/kliuchnikovv/nomi-api/internal/githubapp"
+	"github.com/kliuchnikovv/nomi-api/internal/integrations"
+	"github.com/kliuchnikovv/nomi-api/internal/plugins"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

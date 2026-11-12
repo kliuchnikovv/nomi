@@ -13,22 +13,22 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/container"
-	"github.com/kliuchnikovv/genie-api/internal/handlers"
-	"github.com/kliuchnikovv/genie-api/internal/integrations"
-	"github.com/kliuchnikovv/genie-api/internal/llm"
-	"github.com/kliuchnikovv/genie-api/internal/plugins"
-	"github.com/kliuchnikovv/genie-api/internal/agenttask"
-	"github.com/kliuchnikovv/genie-api/internal/proactive"
-	"github.com/kliuchnikovv/genie-api/internal/scheduler"
-	"github.com/kliuchnikovv/genie-api/internal/server"
+	"github.com/kliuchnikovv/nomi-api/internal/config"
+	"github.com/kliuchnikovv/nomi-api/internal/container"
+	"github.com/kliuchnikovv/nomi-api/internal/handlers"
+	"github.com/kliuchnikovv/nomi-api/internal/integrations"
+	"github.com/kliuchnikovv/nomi-api/internal/llm"
+	"github.com/kliuchnikovv/nomi-api/internal/plugins"
+	"github.com/kliuchnikovv/nomi-api/internal/agenttask"
+	"github.com/kliuchnikovv/nomi-api/internal/proactive"
+	"github.com/kliuchnikovv/nomi-api/internal/scheduler"
+	"github.com/kliuchnikovv/nomi-api/internal/server"
 	"go.uber.org/zap"
 )
 
-// @title Genie API
+// @title Nomi API
 // @version 1.0
-// @description API for Genie (OAuth token management)
+// @description API for Nomi (OAuth token management)
 // @host localhost
 // @BasePath /
 func main() {

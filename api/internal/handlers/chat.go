@@ -6,9 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/apierror"
-	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/services"
+	"github.com/kliuchnikovv/nomi-api/internal/apierror"
+	"github.com/kliuchnikovv/nomi-api/internal/config"
+	"github.com/kliuchnikovv/nomi-api/internal/services"
 )
 
 type ChatHandler struct {

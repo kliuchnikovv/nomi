@@ -6,12 +6,12 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
-import { useTheme } from "@genie/front/context/ThemeContext";
-import { PluginMainScreenProps } from "@genie/front/plugins/types";
-import { getApiUrl } from "@genie/front/config";
-import { authStore } from "@genie/front/apiClient";
-import { SharedPluginScreen } from "@genie/front/plugins/components/SharedPluginScreen";
-import { palette } from "@genie/front/themes";
+import { useTheme } from "@nomi/front/context/ThemeContext";
+import { PluginMainScreenProps } from "@nomi/front/plugins/types";
+import { getApiUrl } from "@nomi/front/config";
+import { authStore } from "@nomi/front/apiClient";
+import { SharedPluginScreen } from "@nomi/front/plugins/components/SharedPluginScreen";
+import { palette } from "@nomi/front/themes";
 
 interface TelegramMessage {
   id: string;

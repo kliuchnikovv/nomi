@@ -8,11 +8,11 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Email } from '@genie/front/services/integrations/IntegrationStorage';
-import { AppleIntelligence } from '@genie/front/services/ai/AppleIntelligence';
-import { emailApi } from '@genie/front/apiClient';
+import type { Email } from '@nomi/front/services/integrations/IntegrationStorage';
+import { AppleIntelligence } from '@nomi/front/services/ai/AppleIntelligence';
+import { emailApi } from '@nomi/front/apiClient';
 
-export const EMAIL_ANALYSIS_MODE_KEY = '@genie_email_analysis_mode';
+export const EMAIL_ANALYSIS_MODE_KEY = '@nomi_email_analysis_mode';
 export type EmailAnalysisMode = 'device' | 'server';
 
 export interface EmailAnalysis {

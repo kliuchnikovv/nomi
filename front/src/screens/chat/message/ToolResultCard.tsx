@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Pressable, StyleSheet, Linking } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
+import { useChatOptional } from '../context';
+import { showToast } from '../../../utils/toast';
 import { ToolCallContent, normalizeToolValue } from './ToolCallContent';
 import type { ResolvedToolCall, ToolCardKind } from './discoveryToolAdapter';
 
@@ -187,11 +189,97 @@ function buildContent(
     };
 }
 
+// Best-effort URL scheme to open the native app for this variant. Deep-linking
+// to a specific event/reminder/message isn't universally supported across
+// Google/iOS apps and their event IDs — we open the app root; the model can be
+// asked (via a follow-up chat prompt) for anything more specific.
+function appUrlForVariant(variant: Props['variant']): string {
+    switch (variant) {
+        case 'calendar':
+            return 'calshow:'; // iOS Calendar app; on Android fall back to google-calendar://
+        case 'email':
+            return 'message://'; // iOS Mail
+        case 'task':
+        default:
+            return 'x-apple-reminderkit://';
+    }
+}
+
+async function openApp(variant: Props['variant']) {
+    const primary = appUrlForVariant(variant);
+    const fallbacks: Record<Props['variant'], string> = {
+        calendar: 'https://calendar.google.com',
+        email: 'https://mail.google.com',
+        task: 'https://reminders.apple.com',
+    };
+    try {
+        const supported = await Linking.canOpenURL(primary);
+        if (supported) return Linking.openURL(primary);
+    } catch {
+        /* fall through */
+    }
+    return Linking.openURL(fallbacks[variant]).catch(() => {
+        showToast('Не удалось открыть приложение');
+    });
+}
+
+function editPrompt(tool: ResolvedToolCall, variant: Props['variant']): string {
+    const args = (() => {
+        const parsed = objectOrParsed(tool.arguments);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    })();
+    const subject =
+        args.title || args.summary || args.subject || args.text || tool.name;
+    const noun =
+        variant === 'calendar'
+            ? 'событие'
+            : variant === 'email'
+            ? 'письмо'
+            : 'задачу';
+    return `Измени ${noun}: ${subject}`;
+}
+
+function sendPrompt(tool: ResolvedToolCall): string {
+    const parsed = objectOrParsed(tool.arguments);
+    const subject =
+        (parsed &&
+            typeof parsed === 'object' &&
+            (parsed.subject || parsed.title)) ||
+        'черновик';
+    return `Отправь письмо: ${subject}`;
+}
+
 export function ToolResultCard({ tool, variant }: Props) {
     const { theme, descriptor } = useTheme();
     const [expanded, setExpanded] = useState(false);
     const color = serviceColor(theme, variant);
     const content = useMemo(() => buildContent(tool, variant), [tool, variant]);
+    const chat = useChatOptional();
+
+    const handleAction = useCallback(
+        (label: string) => {
+            const lc = label.toLowerCase();
+            if (lc === 'open') {
+                openApp(variant);
+                return;
+            }
+            if (!chat?.sendMessage) {
+                showToast('Действие недоступно вне чата');
+                return;
+            }
+            if (lc === 'send') {
+                chat.sendMessage(sendPrompt(tool));
+                return;
+            }
+            if (lc === 'edit') {
+                chat.sendMessage(editPrompt(tool, variant));
+                return;
+            }
+            // Unknown label — send the label itself as a hint to the model.
+            chat.sendMessage(`${label}: ${tool.name}`);
+        },
+        [chat, tool, variant],
+    );
 
     const statusColor =
         content.statusTone === 'success'
@@ -349,16 +437,7 @@ export function ToolResultCard({ tool, variant }: Props) {
                 {content.actions.map((action, i) => (
                     <Pressable
                         key={action.label}
-                        onPress={() => {
-                            // MVP: actions are stubs — the real handlers
-                            // (open event in Calendar app, send draft via
-                            // ClientToolExecutor) come in a follow-up plan.
-                            console.log(
-                                '[ToolResultCard] action',
-                                action.label,
-                                tool.name,
-                            );
-                        }}
+                        onPress={() => handleAction(action.label)}
                         style={({ pressed }) => [
                             styles.action,
                             i > 0 && {

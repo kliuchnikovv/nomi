@@ -2,8 +2,8 @@
  * iOS Calendar client plugin: executes iOS Calendar tool actions via EventKit.
  */
 
-import type { ClientPluginHandler } from '@genie/front/plugins/clientRegistry';
-import { IOSCalendarClient } from '@genie/front/services/integrations/clients/IOSCalendarClient';
+import type { ClientPluginHandler } from '@nomi/front/plugins/clientRegistry';
+import { IOSCalendarClient } from '@nomi/front/services/integrations/clients/IOSCalendarClient';
 
 export const iosCalendarPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {

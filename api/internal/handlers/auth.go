@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kliuchnikovv/genie-api/internal/auth"
-	"github.com/kliuchnikovv/genie-api/internal/services"
+	"github.com/kliuchnikovv/nomi-api/internal/auth"
+	"github.com/kliuchnikovv/nomi-api/internal/services"
 )
 
 type AuthHandler struct {

@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/auth"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/auth"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 	"gorm.io/datatypes"
 )
 

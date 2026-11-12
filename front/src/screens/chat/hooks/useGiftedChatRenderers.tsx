@@ -147,6 +147,166 @@ const FastText = memo(function FastText({
     );
 });
 
+// "Nomi is speaking" header used in voice mode — cyan dot + label.
+// The old wrapper also pulsed the whole text and added a block caret; both
+// have been replaced by karaoke-style highlighting on the currently-spoken
+// chunk (see SpeakingText below), so the wrapper now only owns the header.
+const SpeakingHeader = memo(function SpeakingHeader({
+    theme,
+    onPress,
+}: {
+    theme: any;
+    onPress?: () => void;
+}) {
+    return (
+        <Pressable onPress={onPress}>
+            <View
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginBottom: 6,
+                }}
+            >
+                <View
+                    style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: theme.accentAlt,
+                    }}
+                />
+                <Text
+                    style={{
+                        fontSize: 11,
+                        fontWeight: '600',
+                        color: theme.accent,
+                    }}
+                >
+                    Nomi is speaking
+                </Text>
+            </View>
+        </Pressable>
+    );
+});
+
+// Karaoke-style renderer: splits `text` into three spans (past / currently
+// spoken / future) based on where `chunk` occurs in the full text, and gives
+// the middle span an animated accent color. If `chunk` isn't found, the
+// whole text renders in the normal color.
+const SpeakingText = memo(function SpeakingText({
+    text,
+    chunk,
+    baseStyle,
+    theme,
+    onLongPress,
+    onPress,
+}: {
+    text: string;
+    chunk: string;
+    baseStyle: any;
+    theme: any;
+    onLongPress: (text: string) => void;
+    onPress?: () => void;
+}) {
+    const anim = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        // Non-native driver so we can interpolate color.
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(anim, {
+                    toValue: 1,
+                    duration: 900,
+                    useNativeDriver: false,
+                }),
+                Animated.timing(anim, {
+                    toValue: 0,
+                    duration: 900,
+                    useNativeDriver: false,
+                }),
+            ]),
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [anim]);
+
+    const activeColor = anim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [theme.accentAlt, theme.accent],
+    }) as any;
+
+    // The TTS chunk goes through markdown-strip + whitespace-collapse before
+    // being spoken, while the message text still has its original newlines,
+    // markdown, and emoji. Match with a regex that treats runs of whitespace
+    // as interchangeable so newlines/markdown don't defeat the match.
+    const chunkNormalized = chunk?.trim() ?? '';
+    let range: { start: number; end: number } | null = null;
+    if (chunkNormalized) {
+        const escaped = chunkNormalized
+            .split(/\s+/)
+            .filter(Boolean)
+            .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+            .join('\\s+');
+        try {
+            const m = new RegExp(escaped).exec(text);
+            if (m) range = { start: m.index, end: m.index + m[0].length };
+        } catch {
+            /* Bad regex — fall through to plain rendering. */
+        }
+    }
+
+    if (!range) {
+        return (
+            <Pressable
+                onPress={onPress}
+                onLongPress={() => onLongPress(text)}
+                delayLongPress={300}
+            >
+                <Text style={baseStyle}>{text}</Text>
+            </Pressable>
+        );
+    }
+
+    const before = text.slice(0, range.start);
+    const during = text.slice(range.start, range.end);
+    const after = text.slice(range.end);
+
+    return (
+        <Pressable
+            onPress={onPress}
+            onLongPress={() => onLongPress(text)}
+            delayLongPress={300}
+        >
+            <Text style={baseStyle}>
+                {before}
+                <Animated.Text style={{ color: activeColor }}>
+                    {during}
+                </Animated.Text>
+                {after}
+            </Text>
+        </Pressable>
+    );
+});
+
+// Wrapper for legacy call sites (e.g. Markdown branch) — renders the header
+// above whatever children are passed. No pulse, no caret.
+const SpeakingWrapper = memo(function SpeakingWrapper({
+    theme,
+    children,
+    onPress,
+}: {
+    theme: any;
+    children: React.ReactNode;
+    onPress?: () => void;
+}) {
+    return (
+        <View style={{ width: '100%' }}>
+            <SpeakingHeader theme={theme} onPress={onPress} />
+            {children}
+        </View>
+    );
+});
+
 // Memoized system message bubble
 const SystemMessageBubble = memo(function SystemMessageBubble({
     text,
@@ -222,6 +382,15 @@ interface GiftedChatRenderersParams {
     onChipPress?: (text: string) => void;
     onEnterVoice?: () => void;
     voiceSpeaking?: boolean;
+    /** ID of the message the assistant is currently speaking, so the renderer
+     *  can decorate exactly that one regardless of GiftedChat sort order. */
+    speakingMessageId?: string;
+    /** Substring of the assistant reply currently being voiced — the
+     *  renderer highlights that fragment karaoke-style. */
+    speakingChunk?: string;
+    /** Called when the user taps the currently-speaking assistant text or
+     *  its "Nomi is speaking" header — used to barge-in (interrupt TTS). */
+    onSpeakingTap?: () => void;
 }
 
 export function useGiftedChatRenderers({
@@ -240,6 +409,9 @@ export function useGiftedChatRenderers({
     onChipPress,
     onEnterVoice,
     voiceSpeaking,
+    speakingMessageId,
+    speakingChunk,
+    onSpeakingTap,
 }: GiftedChatRenderersParams) {
     const { width: windowWidth } = useWindowDimensions();
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
@@ -255,6 +427,8 @@ export function useGiftedChatRenderers({
     }));
     const {
         showToolCalls,
+        showReasoning,
+        showMemberResponses,
         isRateLimited,
         availableModels,
         setSelectedModel,
@@ -596,13 +770,32 @@ export function useGiftedChatRenderers({
                 (!contentParts ||
                     contentParts.every((p: any) => p.type === 'text'));
 
-            // In voice mode, the newest visible assistant message is the one
-            // Nomi is currently speaking. Render it bigger with a "Nomi is
-            // speaking" label + blinking caret while `voiceSpeaking` is true.
-            // In an inverted GiftedChat, the newest message has no `nextMessage`.
-            const isLatestAssistant = isAssistant && !props.nextMessage;
+            // In voice mode, render the assistant message Nomi is currently
+            // speaking with the big-text + label + caret wrapper. Match by
+            // explicit id from ChatDetailScreen when we have one; otherwise
+            // fall back to the newest assistant message in the (inverted)
+            // GiftedChat (no `nextMessage`).
+            const currentId = props.currentMessage?._id
+                ? String(props.currentMessage._id)
+                : '';
+            const isLatestAssistant = speakingMessageId
+                ? isAssistant && currentId === speakingMessageId
+                : isAssistant && !props.nextMessage;
+            // In team mode `msg.text` may be empty and all speakable content
+            // lives in `content_parts` (text or member_response). Accept
+            // either shape so karaoke decoration fires either way.
+            const hasSpeakableContent =
+                messageText.length > 0 ||
+                (Array.isArray(contentParts) &&
+                    contentParts.some(
+                        (p: any) =>
+                            (p.type === 'text' ||
+                                p.type === 'member_response') &&
+                            typeof p.text === 'string' &&
+                            p.text.trim().length > 0,
+                    ));
             const isSpeakingLatest =
-                !!voiceSpeaking && isLatestAssistant && messageText.length > 0;
+                !!voiceSpeaking && isLatestAssistant && hasSpeakableContent;
 
             // Render attachments helper component
             const AttachmentsComponent = showAttachmentsInside ? (
@@ -679,83 +872,117 @@ export function useGiftedChatRenderers({
                                   },
                               ]
                             : simpleStyles.text;
+                        const textNode = isSpeakingLatest ? (
+                            <SpeakingText
+                                text={messageText}
+                                chunk={speakingChunk ?? ''}
+                                baseStyle={speakingTextStyle}
+                                theme={theme}
+                                onLongPress={handleTextLongPress}
+                                onPress={onSpeakingTap}
+                            />
+                        ) : (
+                            <FastText
+                                text={messageText}
+                                style={speakingTextStyle}
+                                onLongPress={handleTextLongPress}
+                                isStreaming={isStreaming}
+                            />
+                        );
                         return (
                             <View style={{ width: '100%' }}>
                                 {ContextItemsComponent}
                                 {AttachmentsComponent}
                                 {isSpeakingLatest ? (
-                                    <View
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            gap: 6,
-                                            marginBottom: 6,
-                                        }}
+                                    <SpeakingWrapper
+                                        theme={theme}
+                                        onPress={onSpeakingTap}
                                     >
-                                        <View
-                                            style={{
-                                                width: 6,
-                                                height: 6,
-                                                borderRadius: 3,
-                                                backgroundColor:
-                                                    theme.accentAlt,
-                                            }}
-                                        />
-                                        <Text
-                                            style={{
-                                                fontSize: 11,
-                                                fontWeight: '600',
-                                                color: theme.accent,
-                                            }}
-                                        >
-                                            Nomi is speaking
-                                        </Text>
-                                    </View>
-                                ) : null}
-                                <FastText
-                                    text={messageText}
-                                    style={speakingTextStyle}
-                                    onLongPress={handleTextLongPress}
-                                    isStreaming={
-                                        isStreaming || isSpeakingLatest
-                                    }
-                                />
+                                        {textNode}
+                                    </SpeakingWrapper>
+                                ) : (
+                                    textNode
+                                )}
                                 {ActionsComponent}
                             </View>
                         );
                     }
 
+                    const markdownNode = (
+                        <Pressable
+                            onLongPress={() => handleTextLongPress(messageText)}
+                            delayLongPress={300}
+                        >
+                            <Markdown
+                                style={
+                                    (isSpeakingLatest
+                                        ? {
+                                              ...(markdownStyles as any),
+                                              body: {
+                                                  ...(markdownStyles as any)
+                                                      .body,
+                                                  fontSize: 17,
+                                                  lineHeight: 24,
+                                                  color: theme.textPrimary,
+                                              },
+                                          }
+                                        : markdownStyles) as any
+                                }
+                                rules={stableMarkdownRules}
+                            >
+                                {messageText}
+                            </Markdown>
+                        </Pressable>
+                    );
                     return (
                         <View style={{ width: '100%' }}>
                             {ContextItemsComponent}
                             {AttachmentsComponent}
-                            <Pressable
-                                onLongPress={() =>
-                                    handleTextLongPress(messageText)
-                                }
-                                delayLongPress={300}
-                            >
-                                <Markdown
-                                    style={markdownStyles as any}
-                                    rules={stableMarkdownRules}
+                            {isSpeakingLatest ? (
+                                <SpeakingWrapper
+                                    theme={theme}
+                                    onPress={onSpeakingTap}
                                 >
-                                    {messageText}
-                                </Markdown>
-                            </Pressable>
+                                    {markdownNode}
+                                </SpeakingWrapper>
+                            ) : (
+                                markdownNode
+                            )}
                             {ActionsComponent}
                         </View>
                     );
                 }
 
                 // Mixed content - use ContentPartsRenderer
+                const mixedNode = (
+                    <ContentPartsRenderer
+                        parts={contentParts}
+                        onLongPress={handleTextLongPress}
+                        showToolCalls={showToolCalls}
+                        showReasoning={showReasoning}
+                        showMemberResponses={showMemberResponses}
+                        speakingChunk={
+                            isSpeakingLatest ? speakingChunk : undefined
+                        }
+                        onSpeakingTap={
+                            isSpeakingLatest ? onSpeakingTap : undefined
+                        }
+                    />
+                );
                 return (
                     <View style={{ width: '100%' }}>
                         {ContextItemsComponent}
                         {AttachmentsComponent}
-                        <ContentPartsRenderer
-                            parts={contentParts}
-                            onLongPress={handleTextLongPress}
-                        />
+                        {isSpeakingLatest ? (
+                            <SpeakingWrapper
+                                theme={theme}
+                                onPress={onSpeakingTap}
+                            >
+                                {mixedNode}
+                            </SpeakingWrapper>
+                        ) : (
+                            mixedNode
+                        )}
                         {ActionsComponent}
                     </View>
                 );
@@ -779,42 +1006,100 @@ export function useGiftedChatRenderers({
 
             // Fallback Assistant with fast path for streaming
             if (isStreaming && !hasMarkdown(messageText)) {
+                const speakingTextStyle = isSpeakingLatest
+                    ? [
+                          simpleStyles.text,
+                          {
+                              fontSize: 17,
+                              lineHeight: 24,
+                              color: theme.textPrimary,
+                          },
+                      ]
+                    : simpleStyles.text;
+                const fastFallback = isSpeakingLatest ? (
+                    <SpeakingText
+                        text={messageText}
+                        chunk={speakingChunk ?? ''}
+                        baseStyle={speakingTextStyle}
+                        theme={theme}
+                        onLongPress={handleTextLongPress}
+                        onPress={onSpeakingTap}
+                    />
+                ) : (
+                    <FastText
+                        text={messageText}
+                        style={speakingTextStyle}
+                        onLongPress={handleTextLongPress}
+                        isStreaming={isStreaming}
+                    />
+                );
                 return (
                     <View style={{ width: '100%' }}>
                         {ContextItemsComponent}
                         {AttachmentsComponent}
-                        <FastText
-                            text={messageText}
-                            style={simpleStyles.text}
-                            onLongPress={handleTextLongPress}
-                            isStreaming={isStreaming}
-                        />
+                        {isSpeakingLatest ? (
+                            <SpeakingWrapper
+                                theme={theme}
+                                onPress={onSpeakingTap}
+                            >
+                                {fastFallback}
+                            </SpeakingWrapper>
+                        ) : (
+                            fastFallback
+                        )}
                         {ActionsComponent}
                     </View>
                 );
             }
 
+            const markdownFallback = (
+                <Pressable
+                    onLongPress={() => handleTextLongPress(messageText)}
+                    delayLongPress={300}
+                >
+                    <Markdown
+                        style={
+                            (isSpeakingLatest
+                                ? {
+                                      ...(markdownStyles as any),
+                                      body: {
+                                          ...(markdownStyles as any).body,
+                                          fontSize: 17,
+                                          lineHeight: 24,
+                                          color: theme.textPrimary,
+                                      },
+                                  }
+                                : markdownStyles) as any
+                        }
+                        rules={stableMarkdownRules}
+                    >
+                        {messageText}
+                    </Markdown>
+                </Pressable>
+            );
             return (
                 <View style={{ width: '100%' }}>
                     {ContextItemsComponent}
                     {AttachmentsComponent}
-                    <Pressable
-                        onLongPress={() => handleTextLongPress(messageText)}
-                        delayLongPress={300}
-                    >
-                        <Markdown
-                            style={markdownStyles as any}
-                            rules={stableMarkdownRules}
-                        >
-                            {messageText}
-                        </Markdown>
-                    </Pressable>
+                    {isSpeakingLatest ? (
+                        <SpeakingWrapper theme={theme} onPress={onSpeakingTap}>
+                            {markdownFallback}
+                        </SpeakingWrapper>
+                    ) : (
+                        markdownFallback
+                    )}
                     {showToolCalls &&
                         contentParts &&
                         contentParts.length > 0 && (
                             <ContentPartsRenderer
                                 parts={contentParts}
                                 onLongPress={handleTextLongPress}
+                                speakingChunk={
+                                    isSpeakingLatest ? speakingChunk : undefined
+                                }
+                                onSpeakingTap={
+                                    isSpeakingLatest ? onSpeakingTap : undefined
+                                }
                             />
                         )}
                     {ActionsComponent}
@@ -830,6 +1115,9 @@ export function useGiftedChatRenderers({
             showToolCalls,
             assistantWorking,
             voiceSpeaking,
+            speakingMessageId,
+            speakingChunk,
+            onSpeakingTap,
         ],
     );
 

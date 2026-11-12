@@ -10,7 +10,7 @@ import {
     Platform,
     Dimensions,
 } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { ThemeColors } from '../../../themes/types';
 import { useTheme } from '../../../context/ThemeContext';
 

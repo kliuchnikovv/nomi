@@ -1,6 +1,6 @@
 //
 //  IOSShortcutsManager.swift
-//  Genie
+//  Nomi
 //
 //  iOS Shortcuts Manager for SiriKit and Shortcuts app integration
 //
@@ -69,7 +69,7 @@ class IOSShortcutsManager: NSObject {
                         suggestedPhrase: String,
                         resolver resolve: @escaping RCTPromiseResolveBlock,
                         rejecter reject: @escaping RCTPromiseRejectBlock) {
-        let activityType = "com.genie.shortcut.run"
+        let activityType = "com.nomi.shortcut.run"
         let activity = NSUserActivity(activityType: activityType)
         activity.title = name
         activity.suggestedInvocationPhrase = suggestedPhrase

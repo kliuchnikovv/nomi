@@ -32,6 +32,6 @@ describe('encrypt / decrypt', () => {
 describe('clearEncryptionKey', () => {
     it('calls SecureStore.deleteItemAsync with the key alias', async () => {
         await clearEncryptionKey();
-        expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('genie_encryption_key');
+        expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('nomi_encryption_key');
     });
 });

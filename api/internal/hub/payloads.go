@@ -2,7 +2,7 @@ package hub
 
 import (
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/chat"
+	"github.com/kliuchnikovv/nomi-api/internal/chat"
 )
 
 // PayloadType defines the type of payload in the frame

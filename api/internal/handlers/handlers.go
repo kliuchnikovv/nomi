@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kliuchnikovv/genie-api/internal/auth"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/auth"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
 )
 
 // userFromCtx extracts the authenticated user from context

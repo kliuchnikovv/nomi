@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kliuchnikovv/genie-api/internal/plugins"
+	"github.com/kliuchnikovv/nomi-api/internal/plugins"
 )
 
 // ListPlugins returns the list of loaded plugin manifests (GET /api/plugins).

@@ -1,7 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, Image, View, StyleSheet } from 'react-native';
 import { EmptyPage } from 'iconoir-react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { Attachment } from '../../main/models';
 import { ThemeColors } from '../../../themes/types';
 import { useTheme } from '../../../context/ThemeContext';

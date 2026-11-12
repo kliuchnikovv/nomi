@@ -1,4 +1,4 @@
-# Genie
+# Nomi
 
 <div align="center">
 
@@ -15,7 +15,7 @@
 
 ## 📖 Overview
 
-**Genie** is a comprehensive system designed to bridge the gap between user-facing mobile applications and complex autonomous AI agents. It features a high-performance Go API, a flexible Python-based agent orchestration layer using the [Agno](https://github.com/agno-agi/agno) framework, and a polished React Native mobile interface.
+**Nomi** is a comprehensive system designed to bridge the gap between user-facing mobile applications and complex autonomous AI agents. It features a high-performance Go API, a flexible Python-based agent orchestration layer using the [Agno](https://github.com/agno-agi/agno) framework, and a polished React Native mobile interface.
 
 ### Key Features
 
@@ -55,7 +55,7 @@ graph LR
 ### Prerequisites
 
 - **Docker** & **Docker Compose**
-- **Go** 1.22+
+- **Go** 1.25+
 - **Python** 3.11+
 - **Node.js** 20+
 
@@ -63,8 +63,8 @@ graph LR
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/kliuchnikovv/genie-api.git
-   cd genie-api
+   git clone https://github.com/kliuchnikovv/nomi.git
+   cd nomi
    ```
 
 2. **Initialize the Environment**

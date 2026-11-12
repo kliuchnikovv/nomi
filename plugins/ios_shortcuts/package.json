@@ -1,5 +1,5 @@
 {
-  "name": "@genie/plugin-ios_shortcuts",
+  "name": "@nomi/plugin-ios_shortcuts",
   "version": "1.0.0",
   "description": "iOS native Shortcuts integration",
   "main": "./client/executor.ts",

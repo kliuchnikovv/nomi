@@ -24,7 +24,7 @@ import { useMain } from '../../main/context';
 import { useAuth } from '../../auth/context.tsx';
 import { chatsApi } from '../../../apiClient';
 
-const LAST_SEEN_KEY = '@genie_updates_last_seen';
+const LAST_SEEN_KEY = '@nomi_updates_last_seen';
 const POLL_INTERVAL_MS = 60_000;
 
 interface UpdatesContextType {

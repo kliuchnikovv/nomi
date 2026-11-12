@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, ScrollView } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import Clipboard from '@react-native-clipboard/clipboard';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { useTheme } from '../../../context/ThemeContext';
 import type { ThemeDescriptor } from '../../../themes/types';
 import { createStyles, createMarkdownStyles } from './dynamicStyles';

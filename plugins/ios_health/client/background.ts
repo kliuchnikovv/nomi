@@ -6,8 +6,8 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { IOSHealthClient } from '@genie/front/services/integrations/clients/IOSHealthClient';
-import { eventsApi } from '@genie/front/apiClient';
+import { IOSHealthClient } from '@nomi/front/services/integrations/clients/IOSHealthClient';
+import { eventsApi } from '@nomi/front/apiClient';
 
 /** Thresholds below which a metric is flagged as anomalous. */
 const MIN_SLEEP_HOURS = 6;

@@ -167,13 +167,13 @@
 
 ```xml
 <key>NSContactsUsageDescription</key>
-<string>Genie needs access to your contacts to help you communicate with people</string>
+<string>Nomi needs access to your contacts to help you communicate with people</string>
 
 <key>NSRemindersUsageDescription</key>
-<string>Genie needs access to your reminders to help you stay organized</string>
+<string>Nomi needs access to your reminders to help you stay organized</string>
 
 <key>NSCalendarsUsageDescription</key>
-<string>Genie needs access to your calendar to help manage your events</string>
+<string>Nomi needs access to your calendar to help manage your events</string>
 ```
 
 ---

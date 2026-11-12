@@ -891,6 +891,24 @@ async def build_and_run(
         logger.warning("[TaskRunner] task_start with empty goal, ignoring")
         return
 
+    # Stub mode: skip agent build entirely (mirrors the chat message path in
+    # redis_session.py that returns early before build_agent_instance). The
+    # stub task runner never touches self.agent, so None is safe here.
+    if stub_brain.is_enabled() and goal == stub_brain.TASK:
+        runner = TaskRunner(
+            redis=redis,
+            task_id=task_id,
+            user_id=user_id,
+            chat_id=chat_id,
+            goal=goal,
+            agent=None,
+            task_kind=task_kind,
+            repo=repo,
+            resume_state=resume_state,
+        )
+        await runner.run()
+        return
+
     session = RedisSession(
         agent_factory=agent_factory,
         session_id=chat_id,

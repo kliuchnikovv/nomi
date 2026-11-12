@@ -1,5 +1,5 @@
 //  IOSRemindersManager.swift (clean version - without Date extension duplicates)
-//  Genie
+//  Nomi
 //
 //  iOS Reminders Manager for EventKit integration
 //

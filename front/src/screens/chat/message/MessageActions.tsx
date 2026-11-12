@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
-import { Text } from '@genie/ds';
+import { Text } from '@nomi/ds';
 import { MessageAction } from '../../main/models';
 import { ThemeColors } from '../../../themes/types';
 import { useTheme } from '../../../context/ThemeContext';

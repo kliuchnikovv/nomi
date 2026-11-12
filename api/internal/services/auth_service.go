@@ -10,9 +10,9 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/auth"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
-	"github.com/kliuchnikovv/genie-api/internal/storage/repositories"
+	"github.com/kliuchnikovv/nomi-api/internal/auth"
+	"github.com/kliuchnikovv/nomi-api/internal/storage"
+	"github.com/kliuchnikovv/nomi-api/internal/storage/repositories"
 )
 
 // AuthService contains authentication business logic

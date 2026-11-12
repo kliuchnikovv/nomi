@@ -2,8 +2,8 @@
  * iOS Reminders client plugin: executes iOS Reminders tool actions via EventKit.
  */
 
-import type { ClientPluginHandler } from '@genie/front/plugins/clientRegistry';
-import { IOSRemindersClient } from '@genie/front/services/integrations/clients/IOSRemindersClient';
+import type { ClientPluginHandler } from '@nomi/front/plugins/clientRegistry';
+import { IOSRemindersClient } from '@nomi/front/services/integrations/clients/IOSRemindersClient';
 
 export const iosRemindersPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {
